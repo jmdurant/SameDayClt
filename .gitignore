@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+
+# Chromedriver binaries
+chromedriver.exe
+chromedriver-win64/
+chromedriver-win64.zip
+LICENSE.chromedriver
+
+# Temporary files
+nul
+debug_page.html
+trips_data.js
+latest_version.txt
+
+# Excel output files (keep source, ignore generated)
+CLT_Same_Day_Trips_2025-*.xlsx
+CLT_Trips_With_Real_Prices.xlsx
+CLT_Same_Day_Trips_With_Pricing.xlsx
+*_Same_Day_Trips_*.xlsx
+temp_*.xlsx
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets (if you add API keys to a file later)
+secrets.py
+.env

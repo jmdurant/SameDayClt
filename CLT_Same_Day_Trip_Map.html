@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CLT Same-Day Trip Map</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f5f5;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            color: white;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .header h1 {
+            font-size: 28px;
+            margin-bottom: 5px;
+        }
+        
+        .header p {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+        
+        .controls {
+            background: white;
+            padding: 15px 20px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .control-group label {
+            font-size: 14px;
+            font-weight: 500;
+            color: #333;
+        }
+        
+        .control-group select {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        
+        #map {
+            height: calc(100vh - 160px);
+            width: 100%;
+        }
+        
+        .legend {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            line-height: 1.6;
+        }
+        
+        .legend h4 {
+            margin: 0 0 10px 0;
+            font-size: 16px;
+            color: #333;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 5px 0;
+            font-size: 13px;
+        }
+        
+        .legend-circle {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            border: 2px solid white;
+        }
+        
+        .stats {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            font-size: 13px;
+            line-height: 1.8;
+            max-width: 300px;
+        }
+        
+        .stats strong {
+            color: #1e3c72;
+        }
+        
+        .stats .stat-row {
+            display: flex;
+            justify-content: space-between;
+            margin: 5px 0;
+            padding: 5px 0;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .stats .stat-row:last-child {
+            border-bottom: none;
+        }
+        
+        .excluded {
+            background: #fff3cd;
+            padding: 10px;
+            border-radius: 5px;
+            margin-top: 10px;
+            font-size: 12px;
+        }
+        
+        .excluded-title {
+            font-weight: bold;
+            color: #856404;
+            margin-bottom: 5px;
+        }
+        
+        .excluded-list {
+            color: #856404;
+            line-height: 1.5;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>✈️ CLT Same-Day Trip Map</h1>
+        <p>42 destinations where you can fly out in the morning and return the same evening</p>
+    </div>
+    
+    <div class="controls">
+        <div class="control-group">
+            <label for="minGroundTime">Minimum Time at Destination:</label>
+            <select id="minGroundTime">
+                <option value="0">All Trips</option>
+                <option value="240">4+ hours</option>
+                <option value="300">5+ hours</option>
+                <option value="360">6+ hours</option>
+                <option value="420">7+ hours</option>
+                <option value="480">8+ hours</option>
+            </select>
+        </div>
+        
+        <div class="control-group">
+            <label>
+                <input type="checkbox" id="showLabels" checked> Show Labels
+            </label>
+        </div>
+        
+        <div class="control-group">
+            <label>
+                <input type="checkbox" id="showExcluded"> Show Excluded Destinations
+            </label>
+        </div>
+    </div>
+    
+    <div id="map"></div>
+
+    <script src="trips_data.js"></script>
+    <script>
+        // Convert TRIPS_DATA array to object format for map
+        const sameDayTrips = {};
+        TRIPS_DATA.forEach(trip => {
+            sameDayTrips[trip.code] = {
+                name: trip.city.replace(trip.code + ' ', ''), // Remove code prefix from city name
+                lat: trip.lat,
+                lon: trip.lon,
+                groundTime: trip.groundTime,
+                departCLT: trip.departCLT,
+                arriveCLT: trip.arriveCLT,
+                timeStr: trip.timeStr
+            };
+        });
+
+        // Excluded destinations (have morning departures but no viable same-day returns)
+        const excludedDestinations = {
+            'AVL': { name: 'Asheville', lat: 35.4362, lon: -82.5418 },
+            'CAE': { name: 'Columbia', lat: 33.9388, lon: -81.1195 },
+            'DAY': { name: 'Dayton', lat: 39.9024, lon: -84.2194 },
+            'DFW': { name: 'Dallas/Fort Worth', lat: 32.8998, lon: -97.0403 },
+            'ERI': { name: 'Erie', lat: 42.0831, lon: -80.1740 },
+            'GCM': { name: 'Grand Cayman', lat: 19.2928, lon: -81.3577 },
+            'MBJ': { name: 'Montego Bay', lat: 18.5037, lon: -77.9134 },
+            'MCI': { name: 'Kansas City', lat: 39.2976, lon: -94.7139 },
+            'PLS': { name: 'Providenciales', lat: 21.7738, lon: -72.2688 }
+        };
+
+        // Charlotte coordinates
+        const CLT = { lat: 35.2140, lon: -80.9431 };
+
+        // Initialize map
+        const map = L.map('map', {
+            center: [36, -82],
+            zoom: 5,
+            zoomControl: true
+        });
+
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+            maxZoom: 19
+        }).addTo(map);
+
+        let routeLines = [];
+        let airportMarkers = [];
+        let excludedMarkers = [];
+
+        // Function to get color based on ground time
+        function getColor(minutes) {
+            if (minutes >= 480) return '#15803d'; // 8+ hours - dark green
+            if (minutes >= 420) return '#22c55e'; // 7+ hours - green
+            if (minutes >= 360) return '#3b82f6'; // 6+ hours - blue
+            if (minutes >= 300) return '#f59e0b'; // 5+ hours - orange
+            return '#ef4444'; // < 5 hours - red
+        }
+
+        // Function to get marker size based on ground time
+        function getMarkerSize(minutes) {
+            if (minutes >= 480) return 9;
+            if (minutes >= 420) return 8;
+            if (minutes >= 360) return 7;
+            if (minutes >= 300) return 6;
+            return 5;
+        }
+
+        // Function to draw routes
+        function drawRoutes() {
+            // Clear existing routes and markers
+            routeLines.forEach(line => map.removeLayer(line));
+            airportMarkers.forEach(marker => map.removeLayer(marker));
+            excludedMarkers.forEach(marker => map.removeLayer(marker));
+            routeLines = [];
+            airportMarkers = [];
+            excludedMarkers = [];
+
+            const minTime = parseInt(document.getElementById('minGroundTime').value);
+            const showLabels = document.getElementById('showLabels').checked;
+            const showExcluded = document.getElementById('showExcluded').checked;
+
+            let visibleRoutes = 0;
+
+            // Draw Charlotte marker
+            const cltMarker = L.circleMarker([CLT.lat, CLT.lon], {
+                radius: 12,
+                fillColor: '#1e3c72',
+                color: '#fff',
+                weight: 3,
+                opacity: 1,
+                fillOpacity: 1
+            }).addTo(map);
+            
+            if (showLabels) {
+                cltMarker.bindTooltip('Charlotte (CLT)', {
+                    permanent: true,
+                    direction: 'center',
+                    className: 'airport-label',
+                    offset: [0, 0]
+                });
+            }
+            
+            cltMarker.bindPopup('<strong>Charlotte Douglas International (CLT)</strong><br>Home Base - Same-Day Trip Hub');
+            airportMarkers.push(cltMarker);
+
+            // Draw same-day trip routes
+            Object.keys(sameDayTrips).forEach(code => {
+                const dest = sameDayTrips[code];
+                
+                if (dest.groundTime >= minTime) {
+                    visibleRoutes++;
+                    
+                    // Draw route line
+                    const line = L.polyline([
+                        [CLT.lat, CLT.lon],
+                        [dest.lat, dest.lon]
+                    ], {
+                        color: getColor(dest.groundTime),
+                        weight: 3,
+                        opacity: 0.7,
+                        smoothFactor: 1
+                    }).addTo(map);
+                    
+                    line.bindPopup(`
+                        <strong>${dest.name} (${code})</strong><br>
+                        <strong>Time at Destination: ${dest.timeStr}</strong><br>
+                        Depart CLT: ${dest.departCLT}<br>
+                        Arrive CLT: ${dest.arriveCLT}<br>
+                        <em>Perfect for same-day business or leisure!</em>
+                    `);
+                    
+                    routeLines.push(line);
+
+                    // Draw destination marker
+                    const marker = L.circleMarker([dest.lat, dest.lon], {
+                        radius: getMarkerSize(dest.groundTime),
+                        fillColor: getColor(dest.groundTime),
+                        color: '#fff',
+                        weight: 2,
+                        opacity: 1,
+                        fillOpacity: 0.9
+                    }).addTo(map);
+                    
+                    if (showLabels) {
+                        marker.bindTooltip(`${dest.name}<br>${dest.timeStr}`, {
+                            permanent: true,
+                            direction: 'top',
+                            className: 'airport-label',
+                            offset: [0, -8]
+                        });
+                    }
+                    
+                    marker.bindPopup(`
+                        <strong>${dest.name} (${code})</strong><br>
+                        <strong>Time at Destination: ${dest.timeStr}</strong><br>
+                        Depart CLT: ${dest.departCLT}<br>
+                        Arrive CLT: ${dest.arriveCLT}<br>
+                        <em>Perfect for same-day business or leisure!</em>
+                    `);
+                    
+                    airportMarkers.push(marker);
+                }
+            });
+
+            // Draw excluded destinations
+            if (showExcluded) {
+                Object.keys(excludedDestinations).forEach(code => {
+                    const dest = excludedDestinations[code];
+                    
+                    // Draw faded line
+                    const line = L.polyline([
+                        [CLT.lat, CLT.lon],
+                        [dest.lat, dest.lon]
+                    ], {
+                        color: '#999',
+                        weight: 1,
+                        opacity: 0.3,
+                        dashArray: '5, 10',
+                        smoothFactor: 1
+                    }).addTo(map);
+                    
+                    line.bindPopup(`
+                        <strong>${dest.name} (${code})</strong><br>
+                        <span style="color: #dc2626;">❌ No viable same-day return</span><br>
+                        <em>Morning departure available, but no suitable afternoon return flight.</em>
+                    `);
+                    
+                    excludedMarkers.push(line);
+
+                    // Draw gray marker
+                    const marker = L.circleMarker([dest.lat, dest.lon], {
+                        radius: 4,
+                        fillColor: '#999',
+                        color: '#fff',
+                        weight: 2,
+                        opacity: 0.5,
+                        fillOpacity: 0.5
+                    }).addTo(map);
+                    
+                    if (showLabels) {
+                        marker.bindTooltip(dest.name, {
+                            permanent: true,
+                            direction: 'top',
+                            className: 'airport-label',
+                            offset: [0, -5],
+                            opacity: 0.5
+                        });
+                    }
+                    
+                    marker.bindPopup(`
+                        <strong>${dest.name} (${code})</strong><br>
+                        <span style="color: #dc2626;">❌ No viable same-day return</span><br>
+                        <em>Morning departure available, but no suitable afternoon return flight.</em>
+                    `);
+                    
+                    excludedMarkers.push(marker);
+                });
+            }
+
+            // Update stats
+            updateStats(visibleRoutes);
+        }
+
+        // Add legend
+        const legend = L.control({position: 'bottomright'});
+        legend.onAdd = function() {
+            const div = L.DomUtil.create('div', 'legend');
+            div.innerHTML = `
+                <h4>Time at Destination</h4>
+                <div class="legend-item">
+                    <div class="legend-circle" style="background: #15803d;"></div>
+                    <span>8+ hours</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-circle" style="background: #22c55e;"></div>
+                    <span>7-8 hours</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-circle" style="background: #3b82f6;"></div>
+                    <span>6-7 hours</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-circle" style="background: #f59e0b;"></div>
+                    <span>5-6 hours</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-circle" style="background: #ef4444;"></div>
+                    <span>Under 5 hours</span>
+                </div>
+                <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #ddd;">
+                    <div class="legend-item">
+                        <div class="legend-circle" style="background: #999; opacity: 0.5;"></div>
+                        <span>No same-day return</span>
+                    </div>
+                </div>
+            `;
+            return div;
+        };
+        legend.addTo(map);
+
+        // Add stats
+        const statsControl = L.control({position: 'topleft'});
+        statsControl.onAdd = function() {
+            const div = L.DomUtil.create('div', 'stats');
+            div.id = 'stats';
+            return div;
+        };
+        statsControl.addTo(map);
+
+        function updateStats(visible) {
+            const total = Object.keys(sameDayTrips).length;
+            const excluded = Object.keys(excludedDestinations).length;
+            
+            // Count by time category
+            let count8plus = 0;
+            let count7to8 = 0;
+            let count6to7 = 0;
+            let count5to6 = 0;
+            let countUnder5 = 0;
+            
+            Object.values(sameDayTrips).forEach(dest => {
+                if (dest.groundTime >= 480) count8plus++;
+                else if (dest.groundTime >= 420) count7to8++;
+                else if (dest.groundTime >= 360) count6to7++;
+                else if (dest.groundTime >= 300) count5to6++;
+                else countUnder5++;
+            });
+            
+            let html = `
+                <strong>Same-Day Trip Statistics</strong>
+                <div class="stat-row">
+                    <span>Showing:</span>
+                    <span><strong>${visible}</strong> of ${total}</span>
+                </div>
+                <div class="stat-row">
+                    <span>8+ hours:</span>
+                    <span>${count8plus}</span>
+                </div>
+                <div class="stat-row">
+                    <span>7-8 hours:</span>
+                    <span>${count7to8}</span>
+                </div>
+                <div class="stat-row">
+                    <span>6-7 hours:</span>
+                    <span>${count6to7}</span>
+                </div>
+                <div class="stat-row">
+                    <span>5-6 hours:</span>
+                    <span>${count5to6}</span>
+                </div>
+                <div class="stat-row">
+                    <span>&lt;5 hours:</span>
+                    <span>${countUnder5}</span>
+                </div>
+            `;
+            
+            if (document.getElementById('showExcluded').checked) {
+                html += `
+                    <div class="excluded">
+                        <div class="excluded-title">${excluded} Excluded Destinations:</div>
+                        <div class="excluded-list">AVL, CAE, DAY, DFW, ERI, GCM, MBJ, MCI, PLS</div>
+                    </div>
+                `;
+            }
+            
+            document.getElementById('stats').innerHTML = html;
+        }
+
+        // Event listeners
+        document.getElementById('minGroundTime').addEventListener('change', drawRoutes);
+        document.getElementById('showLabels').addEventListener('change', drawRoutes);
+        document.getElementById('showExcluded').addEventListener('change', drawRoutes);
+
+        // Initial draw
+        drawRoutes();
+    </script>
+</body>
+</html>

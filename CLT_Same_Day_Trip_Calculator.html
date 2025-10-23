@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CLT Same-Day Trip Value Calculator</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+        
+        .header h1 {
+            font-size: 42px;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .header p {
+            font-size: 18px;
+            opacity: 0.95;
+        }
+        
+        .filters {
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 25px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        
+        .filters h2 {
+            margin-bottom: 20px;
+            color: #667eea;
+            font-size: 24px;
+        }
+        
+        .filter-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 15px;
+        }
+        
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        
+        .filter-group label {
+            font-weight: 600;
+            color: #333;
+            font-size: 14px;
+        }
+        
+        .filter-group select, .filter-group input {
+            padding: 10px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+        
+        .filter-group select:focus, .filter-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .stats-bar {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 25px;
+        }
+        
+        .stat-card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        
+        .stat-card .number {
+            font-size: 32px;
+            font-weight: bold;
+            color: #667eea;
+            margin-bottom: 5px;
+        }
+        
+        .stat-card .label {
+            font-size: 14px;
+            color: #666;
+        }
+        
+        .results {
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        
+        .results h2 {
+            margin-bottom: 20px;
+            color: #667eea;
+            font-size: 24px;
+        }
+        
+        .trip-card {
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 15px;
+            transition: all 0.3s;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .trip-card:hover {
+            border-color: #667eea;
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.2);
+            transform: translateY(-2px);
+        }
+        
+        .trip-card.best-value {
+            border-color: #10b981;
+            background: linear-gradient(to right, #f0fdf4 0%, white 100%);
+        }
+        
+        .trip-card.best-value::before {
+            content: '⭐ BEST VALUE';
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: #10b981;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        
+        .trip-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        
+        .trip-destination {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        
+        .trip-code {
+            font-size: 32px;
+            font-weight: bold;
+            color: #667eea;
+        }
+        
+        .trip-city {
+            font-size: 20px;
+            color: #333;
+        }
+        
+        .trip-cost {
+            text-align: right;
+        }
+        
+        .total-cost {
+            font-size: 36px;
+            font-weight: bold;
+            color: #667eea;
+        }
+        
+        .cost-breakdown {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
+        
+        .trip-details {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #e0e0e0;
+        }
+        
+        .detail-item {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        
+        .detail-label {
+            font-size: 12px;
+            color: #666;
+            text-transform: uppercase;
+            font-weight: 600;
+        }
+        
+        .detail-value {
+            font-size: 16px;
+            color: #333;
+            font-weight: 500;
+        }
+        
+        .value-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 600;
+            margin-top: 5px;
+        }
+        
+        .value-excellent {
+            background: #d1fae5;
+            color: #065f46;
+        }
+        
+        .value-good {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+        
+        .value-fair {
+            background: #fef3c7;
+            color: #92400e;
+        }
+        
+        .no-results {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+            font-size: 18px;
+        }
+        
+        .disclaimer {
+            background: #fef3c7;
+            border: 2px solid #fbbf24;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 20px;
+            font-size: 13px;
+            color: #92400e;
+        }
+        
+        .disclaimer strong {
+            display: block;
+            margin-bottom: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>✈️ Same-Day Trip Value Calculator</h1>
+            <p>Find the best value same-day trips from Charlotte (CLT)</p>
+        </div>
+        
+        <div class="filters">
+            <h2>🎯 Filter Your Perfect Trip</h2>
+            <div class="filter-row">
+                <div class="filter-group">
+                    <label for="maxBudget">Maximum Budget</label>
+                    <select id="maxBudget">
+                        <option value="999">Any Budget</option>
+                        <option value="150">Under $150</option>
+                        <option value="175">Under $175</option>
+                        <option value="200">Under $200</option>
+                        <option value="225">Under $225</option>
+                        <option value="250">Under $250</option>
+                        <option value="300">Under $300</option>
+                    </select>
+                </div>
+                
+                <div class="filter-group">
+                    <label for="minTime">Minimum Time at Destination</label>
+                    <select id="minTime">
+                        <option value="0">Any Duration</option>
+                        <option value="300">5+ hours</option>
+                        <option value="360">6+ hours</option>
+                        <option value="420">7+ hours</option>
+                        <option value="480">8+ hours</option>
+                    </select>
+                </div>
+                
+                <div class="filter-group">
+                    <label for="sortBy">Sort By</label>
+                    <select id="sortBy">
+                        <option value="value">Best Value ($/hour)</option>
+                        <option value="cost">Lowest Total Cost</option>
+                        <option value="time">Most Time at Destination</option>
+                        <option value="flight">Cheapest Flight</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+        
+        <div class="stats-bar" id="statsBar">
+            <div class="stat-card">
+                <div class="number" id="statShowing">42</div>
+                <div class="label">Trips Shown</div>
+            </div>
+            <div class="stat-card">
+                <div class="number" id="statAvgCost">$188</div>
+                <div class="label">Avg Total Cost</div>
+            </div>
+            <div class="stat-card">
+                <div class="number" id="statCheapest">$135</div>
+                <div class="label">Cheapest Trip</div>
+            </div>
+            <div class="stat-card">
+                <div class="number" id="statBestValue">ATL</div>
+                <div class="label">Best Value</div>
+            </div>
+        </div>
+        
+        <div class="results">
+            <h2>🏆 Your Trip Options</h2>
+            <div id="tripResults"></div>
+            
+            <div class="disclaimer">
+                <strong>Pricing Note:</strong>
+                Flight prices are fetched from Amadeus API where available (real pricing for 25 destinations). Car rental prices are estimates. Prices vary by date and availability. Always verify current prices when booking.
+            </div>
+        </div>
+    </div>
+
+    <script src="trips_data.js"></script>
+    <script>
+        // Trip data loaded from trips_data.js (TRIPS_DATA)
+        // Contains real pricing from Amadeus API
+        const trips = TRIPS_DATA;
+
+        // Calculate derived values
+        trips.forEach(trip => {
+            trip.total = trip.flight + trip.car;
+            trip.costPerHour = trip.total / (trip.groundTime / 60);
+            trip.hours = trip.groundTime / 60;
+        });
+
+        function getValueRating(costPerHour) {
+            if (costPerHour < 20) return 'excellent';
+            if (costPerHour < 30) return 'good';
+            return 'fair';
+        }
+
+        function filterAndSortTrips() {
+            const maxBudget = parseInt(document.getElementById('maxBudget').value);
+            const minTime = parseInt(document.getElementById('minTime').value);
+            const sortBy = document.getElementById('sortBy').value;
+
+            // Filter
+            let filtered = trips.filter(trip => 
+                trip.total <= maxBudget && trip.groundTime >= minTime
+            );
+
+            // Sort
+            filtered.sort((a, b) => {
+                switch(sortBy) {
+                    case 'value': return a.costPerHour - b.costPerHour;
+                    case 'cost': return a.total - b.total;
+                    case 'time': return b.groundTime - a.groundTime;
+                    case 'flight': return a.flight - b.flight;
+                    default: return a.costPerHour - b.costPerHour;
+                }
+            });
+
+            return filtered;
+        }
+
+        function updateStats(filtered) {
+            document.getElementById('statShowing').textContent = filtered.length;
+            
+            if (filtered.length > 0) {
+                const avgCost = filtered.reduce((sum, t) => sum + t.total, 0) / filtered.length;
+                document.getElementById('statAvgCost').textContent = '$' + Math.round(avgCost);
+                
+                const cheapest = Math.min(...filtered.map(t => t.total));
+                document.getElementById('statCheapest').textContent = '$' + cheapest;
+                
+                const bestValue = filtered[0];
+                document.getElementById('statBestValue').textContent = bestValue.code;
+            }
+        }
+
+        function renderTrips() {
+            const filtered = filterAndSortTrips();
+            const container = document.getElementById('tripResults');
+            
+            updateStats(filtered);
+
+            if (filtered.length === 0) {
+                container.innerHTML = '<div class="no-results">No trips match your filters. Try adjusting your criteria!</div>';
+                return;
+            }
+
+            const bestValue = filtered[0];
+
+            container.innerHTML = filtered.map((trip, index) => {
+                const valueRating = getValueRating(trip.costPerHour);
+                const isBestValue = trip.code === bestValue.code;
+                
+                return `
+                    <div class="trip-card ${isBestValue ? 'best-value' : ''}">
+                        <div class="trip-header">
+                            <div class="trip-destination">
+                                <div class="trip-code">${trip.code}</div>
+                                <div class="trip-city">${trip.city}</div>
+                            </div>
+                            <div class="trip-cost">
+                                <div class="total-cost">$${trip.total}</div>
+                                <div class="cost-breakdown">$${trip.flight} flight + $${trip.car} car</div>
+                                <div class="value-badge value-${valueRating}">
+                                    $${trip.costPerHour.toFixed(2)}/hour
+                                </div>
+                            </div>
+                        </div>
+                        <div class="trip-details">
+                            <div class="detail-item">
+                                <div class="detail-label">Time at Destination</div>
+                                <div class="detail-value">${trip.timeStr}</div>
+                            </div>
+                            <div class="detail-item">
+                                <div class="detail-label">Depart CLT</div>
+                                <div class="detail-value">${trip.departCLT}</div>
+                            </div>
+                            <div class="detail-item">
+                                <div class="detail-label">Arrive CLT</div>
+                                <div class="detail-value">${trip.arriveCLT}</div>
+                            </div>
+                            <div class="detail-item">
+                                <div class="detail-label">Value Rating</div>
+                                <div class="detail-value">${valueRating.charAt(0).toUpperCase() + valueRating.slice(1)}</div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Event listeners
+        document.getElementById('maxBudget').addEventListener('change', renderTrips);
+        document.getElementById('minTime').addEventListener('change', renderTrips);
+        document.getElementById('sortBy').addEventListener('change', renderTrips);
+
+        // Initial render
+        renderTrips();
+    </script>
+</body>
+</html>

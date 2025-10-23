@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pip install:*)",
+      "Bash(python:*)",
+      "Bash(findstr:*)",
+      "WebFetch(domain:github.com)",
+      "Bash(git clone:*)",
+      "Bash(curl:*)",
+      "Bash(unzip:*)",
+      "Bash(del chromedriver.zip)",
+      "Bash(tar:*)",
+      "Bash(move:*)",
+      "WebFetch(domain:console.apify.com)",
+      "Bash(dir:*)",
+      "Bash(flutter --version:*)",
+      "Bash(git add:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
