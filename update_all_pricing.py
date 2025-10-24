@@ -391,8 +391,6 @@ def update_pricing_for_trip(df, idx, search_date, amadeus_token, award_driver, a
         else:
             print(f"    Outbound: Not found matching {depart_clt}")
 
-        time.sleep(1)
-
         # Return: Destination -> CLT (match departure time from spreadsheet)
         cash_ret = fetch_cash_pricing(amadeus_token, destination, 'CLT', search_date, depart_dest)
         if cash_ret:
@@ -423,8 +421,6 @@ def update_pricing_for_trip(df, idx, search_date, amadeus_token, award_driver, a
             updates['Award Miles Outbound Main'] = 'No Reward Available'
             updates['Award Miles Outbound First'] = 'No Reward Available'
             print(f"    Outbound: No reward availability")
-
-        time.sleep(2)
 
         # Return: Destination -> CLT
         award_ret = fetch_award_pricing(award_driver, destination, 'CLT', search_date, depart_dest)
@@ -570,7 +566,6 @@ def main():
             version_main=141
         )
         print("[SUCCESS] Browser started")
-        time.sleep(1)
 
     # Process each destination
     print("\n" + "=" * 70)

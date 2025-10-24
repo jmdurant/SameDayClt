@@ -33,6 +33,7 @@ import pandas as pd
 import requests
 import time
 from datetime import datetime, timedelta
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 
 # Amadeus API Configuration
@@ -64,6 +65,56 @@ def get_amadeus_token():
         return None
 
 
+def discover_destinations(token, origin, date, max_duration_hours=4):
+    """
+    Discover viable destinations using Flight Inspiration Search.
+    Only returns destinations with nonstop flights.
+
+    Args:
+        token: Amadeus API access token
+        origin: Origin airport code
+        date: Departure date YYYY-MM-DD
+        max_duration_hours: Maximum flight duration in hours (filters out distant destinations)
+
+    Returns:
+        List of destination dicts with 'code' and 'city' keys
+    """
+    url = f"{AMADEUS_BASE_URL}/v1/shopping/flight-destinations"
+    headers = {"Authorization": f"Bearer {token}"}
+    params = {
+        "origin": origin,
+        "departureDate": date,
+        "oneWay": "false",  # Round trip
+        "nonStop": "true",  # Only nonstop flights
+        "duration": f"1,{max_duration_hours}"  # Filter by flight duration
+    }
+
+    try:
+        print(f"[Discovering] Searching for nonstop destinations from {origin}...")
+        response = requests.get(url, headers=headers, params=params, timeout=30)
+        response.raise_for_status()
+        data = response.json()
+
+        destinations = []
+        if 'data' in data:
+            for item in data['data']:
+                dest_code = item.get('destination')
+                if dest_code:
+                    # Flight Inspiration doesn't include city names, use code as placeholder
+                    destinations.append({
+                        'code': dest_code,
+                        'city': dest_code  # Will show as "ATL ATL" but works
+                    })
+
+        print(f"[SUCCESS] Found {len(destinations)} nonstop destinations")
+        return destinations
+
+    except Exception as e:
+        print(f"[WARNING] Flight Inspiration Search failed: {e}")
+        print(f"[INFO] Will fall back to manual destination list")
+        return None
+
+
 def search_flights(token, origin, destination, date, max_results=50):
     """
     Search for flights between two airports on a specific date.
@@ -77,7 +128,8 @@ def search_flights(token, origin, destination, date, max_results=50):
         "departureDate": date,
         "adults": 1,
         "max": max_results,
-        "currencyCode": "USD"
+        "currencyCode": "USD",
+        "nonStop": "true"  # Only search nonstop flights for same-day trips
     }
 
     try:
@@ -234,7 +286,7 @@ def find_same_day_trips_for_destination(token, origin, destination, city_name, d
     print(f"  Outbound: {origin} -> {destination}")
     outbound_offers = search_flights(token, origin, destination, date)
     print(f"    API returned {len(outbound_offers)} total outbound flights")
-    outbound_flights = filter_outbound_flights(outbound_offers, max_depart_hour, max_duration, debug=False)
+    outbound_flights = filter_outbound_flights(outbound_offers, max_depart_hour, max_duration, debug=True)
     print(f"    Found {len(outbound_flights)} early flights (depart < {max_depart_hour}:00)")
 
     if not outbound_flights:
@@ -370,11 +422,20 @@ def main():
 
     print()
 
-    # Load destinations
-    destinations = load_destinations(args.input)
+    # First, try to discover destinations using Flight Inspiration Search
+    destinations = None
+    if not args.destinations:  # Only auto-discover if user didn't specify destinations
+        print("[AUTO-DISCOVERY] Using Flight Inspiration Search...")
+        destinations = discover_destinations(token, args.origin.upper(), args.date, max_duration_hours=4)
+
+    # Fall back to Excel file if Flight Inspiration failed or was skipped
     if not destinations:
-        print("[ERROR] No destinations loaded. Using fallback list.")
-        # Fallback to some common destinations
+        print("[FALLBACK] Loading destinations from Excel file...")
+        destinations = load_destinations(args.input)
+
+    # Final fallback to hard-coded list
+    if not destinations:
+        print("[ERROR] No destinations loaded. Using minimal fallback list.")
         destinations = [
             {'code': 'ATL', 'city': 'Atlanta'},
             {'code': 'MIA', 'city': 'Miami'},
@@ -399,12 +460,15 @@ def main():
     print("SEARCHING FOR TRIPS")
     print("=" * 70)
 
-    # Process each destination
+    # Process each destination in parallel
     all_trips = []
-    for i, dest in enumerate(destinations, 1):
+
+    # Create a wrapper function to include destination index for progress tracking
+    def process_destination(index_dest):
+        i, dest = index_dest
         print(f"\n[{i}/{len(destinations)}] Processing {dest['code']} - {dest['city']}")
 
-        trips = find_same_day_trips_for_destination(
+        return find_same_day_trips_for_destination(
             token,
             args.origin.upper(),
             dest['code'],
@@ -417,10 +481,23 @@ def main():
             args.return_by
         )
 
-        all_trips.extend(trips)
+    # Use ThreadPoolExecutor for parallel API calls
+    # max_workers=10 provides good parallelism without overwhelming API
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        # Submit all destination searches
+        future_to_dest = {
+            executor.submit(process_destination, (i, dest)): dest
+            for i, dest in enumerate(destinations, 1)
+        }
 
-        # Delay between destinations
-        time.sleep(1)
+        # Collect results as they complete
+        for future in as_completed(future_to_dest):
+            dest = future_to_dest[future]
+            try:
+                trips = future.result()
+                all_trips.extend(trips)
+            except Exception as e:
+                print(f"[ERROR] Failed to process {dest['code']}: {e}")
 
     # Save results
     print()
