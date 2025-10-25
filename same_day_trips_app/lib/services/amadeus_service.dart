@@ -3,9 +3,9 @@ import '../models/flight_offer.dart';
 
 /// Direct Amadeus API service - no Flask server required!
 class AmadeusService {
-  static const String baseUrl = 'https://test.api.amadeus.com';
-  static const String apiKey = 'zDYWXqUHNcmVPjvHVxBeTLK8pZGZ8KbI';
-  static const String apiSecret = 'QcuIX7JOc4G0AOdc';
+  static const String baseUrl = 'https://api.amadeus.com';
+  static const String apiKey = 'F0QDmuG1Kc7tXkeGTDzsTAIxgQ7u8jNV';
+  static const String apiSecret = 'CA31MljZl5BLgn79';
 
   final Dio _dio = Dio(BaseOptions(
     baseUrl: baseUrl,
@@ -49,8 +49,8 @@ class AmadeusService {
     }
   }
 
-  /// Discover viable destinations using Flight Inspiration Search
-  /// Only returns destinations with nonstop flights
+  /// Discover all direct flight destinations from an airport
+  /// Uses Airport Direct Destinations API
   Future<List<Destination>> discoverDestinations({
     required String origin,
     required String date,
@@ -59,29 +59,30 @@ class AmadeusService {
     await authenticate();
 
     try {
-      print('🔍 Discovering nonstop destinations from $origin...');
+      print('🔍 Discovering direct destinations from $origin...');
 
       final response = await _dio.get(
-        '/v1/shopping/flight-destinations',
+        '/v1/airport/direct-destinations',
         options: Options(
           headers: {'Authorization': 'Bearer $_token'},
         ),
         queryParameters: {
-          'origin': origin,
-          'departureDate': date,
-          'oneWay': 'false',
-          'nonStop': 'true',
-          'duration': '1,$maxDurationHours',
+          'departureAirportCode': origin,
         },
       );
 
       final data = response.data['data'] as List? ?? [];
-      final destinations = data.map((item) => Destination.fromJson(item)).toList();
+      final destinations = data.map((item) {
+        return Destination(
+          code: item['iataCode'] as String,
+          city: item['name'] as String,
+        );
+      }).toList();
 
-      print('✅ Found ${destinations.length} nonstop destinations');
+      print('✅ Found ${destinations.length} direct destinations');
       return destinations;
     } catch (e) {
-      print('⚠️ Flight Inspiration Search failed: $e');
+      print('⚠️ Airport Direct Destinations API failed: $e');
       return [];
     }
   }
@@ -108,7 +109,6 @@ class AmadeusService {
           'adults': 1,
           'max': maxResults,
           'currencyCode': 'USD',
-          'nonStop': 'true', // Only nonstop flights for same-day trips
         },
       );
 
@@ -146,12 +146,18 @@ class AmadeusService {
     int maxArriveHour,
     int maxDuration,
   ) {
-    return flights.where((flight) {
+    final filtered = flights.where((flight) {
       // Use local hour extracted from API string (avoids timezone conversion issues)
-      return flight.arriveHourLocal >= minArriveHour &&
-             flight.arriveHourLocal < maxArriveHour &&
-             flight.durationMinutes <= maxDuration;
+      final passesArrivalWindow = flight.arriveHourLocal >= minArriveHour &&
+                                   flight.arriveHourLocal < maxArriveHour;
+      final passesDuration = flight.durationMinutes <= maxDuration;
+
+      print('      Return Flight ${flight.flightNumbers}: arrive ${flight.arriveHourLocal}:xx (want ${minArriveHour}-${maxArriveHour}), ${flight.durationMinutes}min (want <=${maxDuration}) - ${passesArrivalWindow && passesDuration ? "PASS" : "FAIL"}');
+
+      return passesArrivalWindow && passesDuration;
     }).toList();
+
+    return filtered;
   }
 
   /// Calculate ground time between landing and takeoff in hours

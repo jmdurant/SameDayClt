@@ -13,6 +13,12 @@ dependencies:
   # HTTP requests
   dio: ^5.4.0
 
+  # AI - Direct REST API calls to Gemini with Maps grounding (no SDK needed!)
+
+  # Location
+  geolocator: ^14.0.2
+  permission_handler: ^12.0.1
+
   # State management
   provider: ^6.1.1
 
@@ -24,6 +30,7 @@ dependencies:
   cupertino_icons: ^1.0.2
   intl: ^0.18.1
   url_launcher: ^6.2.0
+  webview_flutter: ^4.4.0
 
   # Data table
   data_table_2: ^2.5.11

@@ -1,11 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/trip.dart';
+import '../models/stop.dart';
+import '../services/mapbox_service.dart';
+import 'arrival_assistant_screen.dart';
+import 'voice_assistant_screen.dart';
 
-class TripDetailScreen extends StatelessWidget {
+class TripDetailScreen extends StatefulWidget {
   final Trip trip;
 
   const TripDetailScreen({super.key, required this.trip});
+
+  @override
+  State<TripDetailScreen> createState() => _TripDetailScreenState();
+}
+
+class _TripDetailScreenState extends State<TripDetailScreen> {
+  final List<Stop> _stops = [];
 
   Future<void> _launchUrl(String? url) async {
     if (url == null || url.isEmpty) return;
@@ -16,11 +27,24 @@ class TripDetailScreen extends StatelessWidget {
     }
   }
 
+  Future<void> _addStop() async {
+    final result = await showDialog<Stop>(
+      context: context,
+      builder: (context) => AddStopDialog(destinationCity: widget.trip.city),
+    );
+
+    if (result != null) {
+      setState(() {
+        _stops.add(result);
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('${trip.destination} Day Trip'),
+        title: Text('${widget.trip.destination} Day Trip'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
       ),
       body: SingleChildScrollView(
@@ -43,7 +67,7 @@ class TripDetailScreen extends StatelessWidget {
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Text(
-                            trip.destination,
+                            widget.trip.destination,
                             style: const TextStyle(
                               color: Colors.white,
                               fontSize: 24,
@@ -57,11 +81,11 @@ class TripDetailScreen extends StatelessWidget {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                trip.city,
+                                widget.trip.city,
                                 style: Theme.of(context).textTheme.titleLarge,
                               ),
                               Text(
-                                trip.date,
+                                widget.trip.date,
                                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                                       color: Colors.grey.shade600,
                                     ),
@@ -78,13 +102,13 @@ class TripDetailScreen extends StatelessWidget {
                         _InfoChip(
                           icon: Icons.schedule,
                           label: 'Meeting Time',
-                          value: trip.groundTime,
+                          value: widget.trip.groundTime,
                           color: Colors.green,
                         ),
                         _InfoChip(
                           icon: Icons.attach_money,
                           label: 'Flight Cost',
-                          value: '\$${trip.totalFlightCost.toStringAsFixed(0)}',
+                          value: '\$${widget.trip.totalFlightCost.toStringAsFixed(0)}',
                           color: Colors.blue,
                         ),
                       ],
@@ -94,6 +118,58 @@ class TripDetailScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 16),
+
+            // AI Assistant Buttons
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => ArrivalAssistantScreen(
+                            trip: widget.trip,
+                            stops: _stops,
+                          ),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.chat),
+                    label: const Text('Text Chat'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.purple,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.all(16),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => VoiceAssistantScreen(
+                            trip: widget.trip,
+                            stops: _stops,
+                          ),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.mic),
+                    label: const Text('Voice Mode'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.deepPurple,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.all(16),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
 
             // Itinerary
             Text(
@@ -106,12 +182,12 @@ class TripDetailScreen extends StatelessWidget {
             _FlightCard(
               title: 'Outbound Flight',
               icon: Icons.flight_takeoff,
-              flightNumber: trip.outboundFlight,
-              departure: trip.departOrigin,
-              arrival: trip.arriveDestination,
-              duration: trip.outboundDuration,
-              stops: trip.outboundStops,
-              price: trip.outboundPrice,
+              flightNumber: widget.trip.outboundFlight,
+              departure: widget.trip.departOrigin,
+              arrival: widget.trip.arriveDestination,
+              duration: widget.trip.outboundDuration,
+              stops: widget.trip.outboundStops,
+              price: widget.trip.outboundPrice,
             ),
             const SizedBox(height: 16),
 
@@ -140,13 +216,13 @@ class TripDetailScreen extends StatelessWidget {
                             style: TextStyle(fontWeight: FontWeight.bold),
                           ),
                           Text(
-                            trip.groundTime,
+                            widget.trip.groundTime,
                             style: Theme.of(context).textTheme.titleLarge?.copyWith(
                                   color: Colors.green.shade700,
                                 ),
                           ),
                           Text(
-                            '${trip.groundTimeHours.toStringAsFixed(1)} hours for meetings',
+                            '${widget.trip.groundTimeHours.toStringAsFixed(1)} hours for meetings',
                             style: TextStyle(
                               fontSize: 12,
                               color: Colors.grey.shade700,
@@ -161,16 +237,125 @@ class TripDetailScreen extends StatelessWidget {
             ),
             const SizedBox(height: 16),
 
+            // Stops Planning Section
+            Text(
+              'Plan Your Stops',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 12),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (_stops.isEmpty)
+                      Column(
+                        children: [
+                          Icon(Icons.location_on_outlined, size: 48, color: Colors.grey.shade400),
+                          const SizedBox(height: 8),
+                          Text(
+                            'No stops added yet',
+                            style: TextStyle(color: Colors.grey.shade600),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Add meetings or appointments during your trip',
+                            style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                      )
+                    else
+                      ..._stops.asMap().entries.map((entry) {
+                        final index = entry.key;
+                        final stop = entry.value;
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 32,
+                                height: 32,
+                                decoration: BoxDecoration(
+                                  color: Colors.blue,
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    '${index + 1}',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      stop.name,
+                                      style: const TextStyle(fontWeight: FontWeight.bold),
+                                    ),
+                                    Text(
+                                      stop.address,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.grey.shade600,
+                                      ),
+                                    ),
+                                    Text(
+                                      '${stop.formatDuration()} planned',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.blue.shade700,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.delete_outline),
+                                onPressed: () {
+                                  setState(() {
+                                    _stops.removeAt(index);
+                                  });
+                                },
+                                color: Colors.red,
+                              ),
+                            ],
+                          ),
+                        );
+                      }),
+                    const SizedBox(height: 8),
+                    ElevatedButton.icon(
+                      onPressed: _addStop,
+                      icon: const Icon(Icons.add_location),
+                      label: Text(_stops.isEmpty ? 'Add Stop' : 'Add Another Stop'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blue,
+                        foregroundColor: Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+
             // Return Flight
             _FlightCard(
               title: 'Return Flight',
               icon: Icons.flight_land,
-              flightNumber: trip.returnFlight,
-              departure: trip.departDestination,
-              arrival: trip.arriveOrigin,
-              duration: trip.returnDuration,
-              stops: trip.returnStops,
-              price: trip.returnPrice,
+              flightNumber: widget.trip.returnFlight,
+              departure: widget.trip.departDestination,
+              arrival: widget.trip.arriveOrigin,
+              duration: widget.trip.returnDuration,
+              stops: widget.trip.returnStops,
+              price: widget.trip.returnPrice,
             ),
             const SizedBox(height: 24),
 
@@ -185,7 +370,7 @@ class TripDetailScreen extends StatelessWidget {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         const Text('Total Trip Time:', style: TextStyle(fontWeight: FontWeight.bold)),
-                        Text(trip.totalTripTime),
+                        Text(widget.trip.totalTripTime),
                       ],
                     ),
                     const SizedBox(height: 8),
@@ -194,7 +379,7 @@ class TripDetailScreen extends StatelessWidget {
                       children: [
                         const Text('Total Flight Cost:', style: TextStyle(fontWeight: FontWeight.bold)),
                         Text(
-                          '\$${trip.totalFlightCost.toStringAsFixed(2)}',
+                          '\$${widget.trip.totalFlightCost.toStringAsFixed(2)}',
                           style: const TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
@@ -210,38 +395,38 @@ class TripDetailScreen extends StatelessWidget {
             const SizedBox(height: 24),
 
             // Booking Links
-            if (trip.googleFlightsUrl != null || trip.kayakUrl != null || trip.airlineUrl != null) ...[
+            if (widget.trip.googleFlightsUrl != null || widget.trip.kayakUrl != null || widget.trip.airlineUrl != null) ...[
               Text(
                 'Book Your Flights',
                 style: Theme.of(context).textTheme.titleLarge,
               ),
               const SizedBox(height: 12),
-              if (trip.googleFlightsUrl != null)
+              if (widget.trip.googleFlightsUrl != null)
                 _BookingButton(
                   label: 'Search on Google Flights',
                   icon: Icons.search,
                   color: Colors.blue,
-                  onPressed: () => _launchUrl(trip.googleFlightsUrl),
+                  onPressed: () => _launchUrl(widget.trip.googleFlightsUrl),
                 ),
-              if (trip.kayakUrl != null)
+              if (widget.trip.kayakUrl != null)
                 _BookingButton(
                   label: 'Compare on Kayak',
                   icon: Icons.compare_arrows,
                   color: Colors.orange,
-                  onPressed: () => _launchUrl(trip.kayakUrl),
+                  onPressed: () => _launchUrl(widget.trip.kayakUrl),
                 ),
-              if (trip.airlineUrl != null)
+              if (widget.trip.airlineUrl != null)
                 _BookingButton(
                   label: 'Search AA Award Flights',
                   icon: Icons.card_giftcard,
                   color: Colors.red,
-                  onPressed: () => _launchUrl(trip.airlineUrl),
+                  onPressed: () => _launchUrl(widget.trip.airlineUrl),
                 ),
               const SizedBox(height: 24),
             ],
 
             // Ground Transportation
-            if (trip.turoSearchUrl != null) ...[
+            if (widget.trip.turoSearchUrl != null) ...[
               Text(
                 'Ground Transportation',
                 style: Theme.of(context).textTheme.titleLarge,
@@ -267,9 +452,9 @@ class TripDetailScreen extends StatelessWidget {
                                     fontSize: 16,
                                   ),
                                 ),
-                                if (trip.turoVehicle != null)
+                                if (widget.trip.turoVehicle != null)
                                   Text(
-                                    trip.turoVehicle!,
+                                    widget.trip.turoVehicle!,
                                     style: TextStyle(color: Colors.grey.shade600),
                                   ),
                               ],
@@ -279,7 +464,7 @@ class TripDetailScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 12),
                       ElevatedButton(
-                        onPressed: () => _launchUrl(trip.turoSearchUrl),
+                        onPressed: () => _launchUrl(widget.trip.turoSearchUrl),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.purple,
                           foregroundColor: Colors.white,
@@ -524,6 +709,254 @@ class _BookingButton extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class AddStopDialog extends StatefulWidget {
+  final String destinationCity;
+
+  const AddStopDialog({super.key, required this.destinationCity});
+
+  @override
+  State<AddStopDialog> createState() => _AddStopDialogState();
+}
+
+class _AddStopDialogState extends State<AddStopDialog> {
+  final _mapboxService = MapboxService();
+  final _searchController = TextEditingController();
+
+  int _durationMinutes = 30;
+  PlaceDetails? _selectedPlace;
+  List<SearchSuggestion> _suggestions = [];
+  bool _isSearching = false;
+  String? _errorMessage;
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _searchPlaces(String query) async {
+    if (query.isEmpty) {
+      setState(() {
+        _suggestions = [];
+        _isSearching = false;
+      });
+      return;
+    }
+
+    setState(() => _isSearching = true);
+
+    try {
+      final results = await _mapboxService.searchPlaces(query: query);
+      setState(() {
+        _suggestions = results;
+        _isSearching = false;
+      });
+    } catch (e) {
+      setState(() {
+        _isSearching = false;
+        _errorMessage = 'Search failed: $e';
+      });
+    }
+  }
+
+  Future<void> _selectSuggestion(SearchSuggestion suggestion) async {
+    try {
+      final details = await _mapboxService.retrievePlaceDetails(
+        mapboxId: suggestion.mapboxId,
+        sessionToken: DateTime.now().millisecondsSinceEpoch.toString(),
+      );
+
+      if (details != null) {
+        setState(() {
+          _selectedPlace = details;
+          _searchController.text = details.name;
+          _suggestions = [];
+          _errorMessage = null;
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Failed to load place details: $e';
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Add Stop'),
+      content: SizedBox(
+        width: 400,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Search field
+              TextField(
+                controller: _searchController,
+                decoration: InputDecoration(
+                  labelText: 'Search for location',
+                  hintText: 'e.g., Texas Children\'s Hospital',
+                  prefixIcon: const Icon(Icons.search),
+                  suffixIcon: _isSearching
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: Center(
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        )
+                      : null,
+                  border: const OutlineInputBorder(),
+                ),
+                onChanged: (value) {
+                  // Debounce search
+                  Future.delayed(const Duration(milliseconds: 500), () {
+                    if (_searchController.text == value) {
+                      _searchPlaces(value);
+                    }
+                  });
+                },
+              ),
+
+              // Error message
+              if (_errorMessage != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text(
+                    _errorMessage!,
+                    style: const TextStyle(color: Colors.red, fontSize: 12),
+                  ),
+                ),
+
+              // Suggestions list
+              if (_suggestions.isNotEmpty)
+                Container(
+                  margin: const EdgeInsets.only(top: 8),
+                  constraints: const BoxConstraints(maxHeight: 200),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey.shade300),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: _suggestions.length,
+                    itemBuilder: (context, index) {
+                      final suggestion = _suggestions[index];
+                      return ListTile(
+                        leading: const Icon(Icons.location_on, size: 20),
+                        title: Text(suggestion.name),
+                        subtitle: Text(
+                          suggestion.displayText,
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                        onTap: () => _selectSuggestion(suggestion),
+                      );
+                    },
+                  ),
+                ),
+
+              // Selected place display
+              if (_selectedPlace != null)
+                Container(
+                  margin: const EdgeInsets.only(top: 8),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.green.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.green.shade300),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.check_circle, color: Colors.green.shade700),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _selectedPlace!.name,
+                              style: const TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                            Text(
+                              _selectedPlace!.fullAddress,
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+              const SizedBox(height: 16),
+
+              // Duration selector
+              Row(
+                children: [
+                  const Icon(Icons.schedule, color: Colors.grey),
+                  const SizedBox(width: 8),
+                  const Text('Duration:'),
+                  const Spacer(),
+                  DropdownButton<int>(
+                    value: _durationMinutes,
+                    items: [15, 30, 45, 60, 90, 120, 180, 240].map((minutes) {
+                      String label;
+                      if (minutes < 60) {
+                        label = '$minutes min';
+                      } else {
+                        final hours = minutes ~/ 60;
+                        final mins = minutes % 60;
+                        label = mins == 0 ? '${hours}h' : '${hours}h ${mins}m';
+                      }
+                      return DropdownMenuItem(
+                        value: minutes,
+                        child: Text(label),
+                      );
+                    }).toList(),
+                    onChanged: (value) {
+                      setState(() {
+                        _durationMinutes = value!;
+                      });
+                    },
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        ElevatedButton(
+          onPressed: _selectedPlace == null
+              ? null
+              : () {
+                  final stop = Stop(
+                    id: DateTime.now().millisecondsSinceEpoch.toString(),
+                    name: _selectedPlace!.name,
+                    address: _selectedPlace!.fullAddress,
+                    durationMinutes: _durationMinutes,
+                    latitude: _selectedPlace!.latitude,
+                    longitude: _selectedPlace!.longitude,
+                  );
+                  Navigator.pop(context, stop);
+                },
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.blue,
+            foregroundColor: Colors.white,
+          ),
+          child: const Text('Add Stop'),
+        ),
+      ],
     );
   }
 }

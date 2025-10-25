@@ -32,14 +32,18 @@ Cross-platform mobile/desktop app:
 - **ResultsScreen**: View all viable trips sorted by meeting time/cost/duration
 - **TripDetailScreen**: Full itinerary with booking links
 
-### Backend (Python) - Legacy Scripts
-Python scripts available for standalone CLI use:
+### Backend (Python)
+**Flask Server**: DEPRECATED - No longer needed!
+- The Flutter app now calls Gemini API directly for AI Arrival Assistant
+- All endpoints (search, chat, Turo, rewards) are optional
+
+**Standalone CLI Scripts**:
 - **Flight Search**: Real-time flight availability and pricing
 - **Award Availability**: Check frequent flyer program options (American Airlines)
 - **Ground Transportation**: Turo car rental integration via Apify
 - **Booking Links**: Generate affiliate links for flight comparison sites
 
-⚠️ **Note**: Flask server (`same_day_trips_app/api/server.py`) is deprecated and no longer needed!
+✅ **The Flutter app is now 100% standalone - no server required!**
 
 ## 🚀 Getting Started
 
@@ -47,7 +51,7 @@ Python scripts available for standalone CLI use:
 
 1. **Python 3.8+** with dependencies:
    ```bash
-   pip install flask flask-cors pandas openpyxl selenium
+   pip install flask flask-cors pandas openpyxl selenium google-genai
    ```
 
 2. **Flutter 3.0+** (already installed ✓)
@@ -55,9 +59,9 @@ Python scripts available for standalone CLI use:
    flutter doctor
    ```
 
-3. **API Tokens** (optional for full functionality):
-   - Apify API token for Turo pricing
-   - Amadeus API for flight data (if used)
+3. **API Tokens**:
+   - **Required for Arrival Assistant**: Google AI API key
+   - **Optional**: Apify API token for Turo pricing, Amadeus API for CLI scripts
 
 ### Environment Setup
 
@@ -71,15 +75,22 @@ Python scripts available for standalone CLI use:
    APIFY_API_TOKEN=your_token_here
    AMADEUS_API_KEY=your_key
    AMADEUS_API_SECRET=your_secret
+   GOOGLE_AI_API_KEY=your_google_ai_key  # For Arrival Assistant
    ```
 
-3. **Update Flutter API service** (same_day_trips_app/lib/services/api_service.dart:7):
+3. **Get Google AI API key** (for Arrival Assistant feature):
+   - Visit https://aistudio.google.com/apikey
+   - Create/copy your API key
+   - Update `same_day_trips_app/lib/services/gemini_service.dart:8`
+   - Replace `YOUR_GOOGLE_AI_API_KEY` with your actual key
+
+4. **Update Flutter API service** (same_day_trips_app/lib/services/api_service.dart:7):
    - Replace `YOUR_APIFY_TOKEN_HERE` with your actual token
    - Or implement proper environment variable handling
 
 ### Running the App
 
-**Just launch the Flutter app - no server needed!** 🎉
+**100% Standalone - No server needed!** 🎉
 
 **Windows Desktop**:
 ```bash
@@ -103,6 +114,8 @@ cd same_day_trips_app
 flutter build windows --release
 # Executable at: build\windows\x64\runner\Release\same_day_trips_app.exe
 ```
+
+The AI Arrival Assistant will work with full Google Maps grounding using direct Gemini API calls - no backend required!
 
 ## 📱 Using the App
 
@@ -130,7 +143,44 @@ Sort by:
 - Cost (find budget-friendly options)
 - Total trip time (minimize travel time)
 
-### 3. Book Your Trip
+### 3. Plan Your Stops
+
+After selecting a trip, you can plan your itinerary:
+- **Add Stops** - Search for POIs, offices, restaurants using Mapbox search
+- **Set Duration** - Specify how long you'll spend at each location (15 min - 4 hours)
+- **Route Planning** - Automatically calculates drive times between stops
+- **Feasibility Check** - Ensures your stops fit within available ground time
+
+### 4. Arrival Assistant (AI-Powered)
+
+**No backend required!** Direct Gemini API integration with Maps grounding.
+
+Once you arrive, activate the AI Arrival Assistant for real-time help:
+- **Contextual Recommendations** - Gemini AI with Google Maps grounding
+- **GPS Location Tracking** - Automatically uses your current location
+- **Trip-Aware** - Knows your itinerary and planned stops
+- **Real-Time Places** - Gets actual place recommendations from Google Maps
+- **Quick Suggestions** - One-tap queries for common needs
+
+How it works:
+1. Tap "Start AI Arrival Assistant" on trip detail screen
+2. Grant location permission when prompted
+3. Ask natural language questions
+4. Get responses grounded in real Google Maps data
+
+Example queries:
+- "Find lunch near my next meeting"
+- "Coffee shops within 5 minutes of here"
+- "Where's the best place to work for an hour?"
+- "Fastest route to the airport?"
+
+The assistant sees:
+- Your current GPS location (updates every 50 meters)
+- Your planned stops and their addresses
+- Your available ground time
+- Flight schedule context
+
+### 5. Book Your Trip
 
 Each trip includes:
 - **Google Flights** - Compare prices across airlines
@@ -147,15 +197,19 @@ SameDayClt/
 │   │   ├── main.dart            # App entry point
 │   │   ├── models/
 │   │   │   ├── trip.dart        # Trip data model
+│   │   │   ├── stop.dart        # Stop/POI model for itinerary planning
 │   │   │   └── flight_offer.dart  # Flight, Destination, SearchCriteria models
 │   │   ├── screens/
-│   │   │   ├── search_screen.dart       # Search interface
-│   │   │   ├── results_screen.dart      # Results list
-│   │   │   └── trip_detail_screen.dart  # Trip details
+│   │   │   ├── search_screen.dart          # Search interface
+│   │   │   ├── results_screen.dart         # Results list
+│   │   │   ├── trip_detail_screen.dart     # Trip details + stops planning
+│   │   │   └── arrival_assistant_screen.dart # AI chat assistant
 │   │   └── services/
-│   │       ├── api_service.dart         # Main API facade (updated for direct calls)
-│   │       ├── amadeus_service.dart     # Amadeus API client (NEW!)
-│   │       └── trip_search_service.dart # Trip search logic (NEW!)
+│   │       ├── api_service.dart         # Main API facade
+│   │       ├── amadeus_service.dart     # Amadeus API client
+│   │       ├── trip_search_service.dart # Trip search logic
+│   │       ├── mapbox_service.dart      # Mapbox location/routing API
+│   │       └── gemini_service.dart      # Gemini AI with Maps grounding (direct API)
 │   ├── api/
 │   │   └── server.py            # Flask API server (DEPRECATED)
 │   └── pubspec.yaml             # Flutter dependencies
@@ -234,20 +288,25 @@ python update_all_pricing.py \
 - [x] Search screen with business focus
 - [x] Results display with sorting
 - [x] Trip detail view
+- [x] **Multi-stop itinerary planning with Mapbox search**
+- [x] **AI Arrival Assistant with Gemini + Google Maps grounding**
+- [x] **Route planning with drive time calculations**
 - [x] Booking link generation
 - [x] Cross-platform support (Windows, Android, iOS)
 - [x] Basic testing
 
 ### 🚧 Future Enhancements
-- [ ] Environment variable handling in Flutter
+- [ ] Environment variable handling in Flutter (use flutter_dotenv)
+- [x] **GPS location tracking** - Completed! Auto-updates every 50 meters
 - [ ] Production Amadeus API credentials (TEST API has limited data)
+- [ ] Route timeline visualization on trip detail screen
+- [ ] Gemini Live voice assistant (hands-free while driving)
 - [ ] Save favorite routes/searches
 - [ ] Multi-date search (show all viable days this week)
 - [ ] Calendar integration
 - [ ] Offline mode with cached searches
 - [ ] Push notifications for price drops
 - [ ] Travel time to/from airport calculation
-- [ ] Meeting location suggestions near airport
 - [ ] Export itinerary to PDF/email
 
 ## 💡 Tips for Effective Day Trips
@@ -274,9 +333,13 @@ python update_all_pricing.py \
 - **Turo pricing**: Requires Apify token - CLI only
 
 ### Architecture Notes
-- **Flask server**: Deprecated, no longer needed! App uses direct Amadeus API calls
+- **100% standalone**: No server required - everything runs client-side in Flutter!
+- **Direct Gemini API**: Uses REST API with Google Maps grounding tool
+- **Trip search**: Pure Dart implementation with direct Amadeus API calls
 - **Python scripts**: Still available for CLI standalone use
 - **Parallel execution**: Up to 10 concurrent API calls for maximum performance
+- **Maps grounding**: Direct REST API calls to Gemini API (gemini-2.0-flash-exp model)
+- **Location tracking**: Geolocator 14.0.2 with 50m update threshold
 - **No affiliate monetization**: Not implemented yet
 
 ## 🤝 Contributing

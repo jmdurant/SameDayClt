@@ -45,5 +45,10 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<!-- Location permissions for Arrival Assistant -->
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>We need your location to provide personalized recommendations near you during your trip.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>We need your location to provide personalized recommendations during your trip.</string>
 </dict>
 </plist>
