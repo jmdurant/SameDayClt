@@ -172,7 +172,25 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> {
   Future<void> _initializeLocation() async {
     try {
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) return;
+      if (!serviceEnabled) {
+        print('⚠️ Location service not enabled, using fallback location');
+        // Use Charlotte, NC as fallback for testing
+        setState(() {
+          _currentLocation = Position(
+            latitude: 35.2271,
+            longitude: -80.8431,
+            timestamp: DateTime.now(),
+            accuracy: 0,
+            altitude: 0,
+            altitudeAccuracy: 0,
+            heading: 0,
+            headingAccuracy: 0,
+            speed: 0,
+            speedAccuracy: 0,
+          );
+        });
+        return;
+      }
 
       LocationPermission permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
@@ -181,6 +199,22 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> {
 
       if (permission == LocationPermission.denied ||
           permission == LocationPermission.deniedForever) {
+        print('⚠️ Location permission denied, using fallback location');
+        // Use Charlotte, NC as fallback
+        setState(() {
+          _currentLocation = Position(
+            latitude: 35.2271,
+            longitude: -80.8431,
+            timestamp: DateTime.now(),
+            accuracy: 0,
+            altitude: 0,
+            altitudeAccuracy: 0,
+            heading: 0,
+            headingAccuracy: 0,
+            speed: 0,
+            speedAccuracy: 0,
+          );
+        });
         return;
       }
 
@@ -190,6 +224,7 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> {
         ),
       );
 
+      print('📍 Got location: ${position.latitude}, ${position.longitude}');
       setState(() {
         _currentLocation = position;
       });
@@ -201,13 +236,29 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> {
           distanceFilter: 100, // Update every 100 meters
         ),
       ).listen((Position position) {
+        print('📍 Location updated: ${position.latitude}, ${position.longitude}');
         setState(() {
           _currentLocation = position;
         });
         _updateLocationInWebView(position);
       });
     } catch (e) {
-      print('⚠️ Location error: $e');
+      print('⚠️ Location error: $e, using fallback location');
+      // Use Charlotte, NC as fallback
+      setState(() {
+        _currentLocation = Position(
+          latitude: 35.2271,
+          longitude: -80.8431,
+          timestamp: DateTime.now(),
+          accuracy: 0,
+          altitude: 0,
+          altitudeAccuracy: 0,
+          heading: 0,
+          headingAccuracy: 0,
+          speed: 0,
+          speedAccuracy: 0,
+        );
+      });
     }
   }
 

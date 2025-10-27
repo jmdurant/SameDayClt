@@ -51,12 +51,14 @@ class _AndroidAutoHomeScreenState extends State<AndroidAutoHomeScreen> {
       _isLoading = false;
     });
 
-    // Auto-launch voice assistant after 1 second
-    Future.delayed(const Duration(seconds: 1), () {
-      if (_activeTrip != null && mounted) {
+    // Android Auto: Launch voice assistant immediately (no delay)
+    // User expects to start talking right away in car
+    if (_activeTrip != null && mounted) {
+      // Use post-frame callback to ensure widget tree is built
+      WidgetsBinding.instance.addPostFrameCallback((_) {
         _launchVoiceAssistant();
-      }
-    });
+      });
+    }
   }
 
   void _launchVoiceAssistant() {

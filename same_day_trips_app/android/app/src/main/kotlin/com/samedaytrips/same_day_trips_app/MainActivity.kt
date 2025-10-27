@@ -48,14 +48,18 @@ class MainActivity: FlutterActivity() {
     
     private fun isAndroidAutoMode(): Boolean {
         return try {
-            // Check if Android Auto is available
-            packageManager.getPackageInfo("com.google.android.projection.gearhead", 0)
+            // Check if running in automotive mode (emulator or real car)
+            val isAutomotive = packageManager.hasSystemFeature(PackageManager.FEATURE_AUTOMOTIVE)
             
-            // Check if running in automotive mode
-            packageManager.hasSystemFeature(PackageManager.FEATURE_AUTOMOTIVE) ||
-            // Check if connected to Android Auto
-            packageManager.hasSystemFeature("android.hardware.type.automotive")
+            // Check if UI mode is car
+            val uiModeManager = getSystemService(android.content.Context.UI_MODE_SERVICE) as android.app.UiModeManager
+            val isCarMode = uiModeManager.currentModeType == android.content.res.Configuration.UI_MODE_TYPE_CAR
+            
+            android.util.Log.d("AndroidAuto", "isAutomotive: $isAutomotive, isCarMode: $isCarMode")
+            
+            isAutomotive || isCarMode
         } catch (e: Exception) {
+            android.util.Log.e("AndroidAuto", "Error detecting Android Auto: ${e.message}")
             false
         }
     }

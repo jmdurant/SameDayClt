@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../services/api_service.dart';
+import '../models/trip.dart';
+import '../models/stop.dart';
 import 'results_screen.dart';
+import 'voice_assistant_screen.dart';
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
@@ -123,6 +126,97 @@ class _SearchScreenState extends State<SearchScreen> {
                         textAlign: TextAlign.center,
                       ),
                     ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // Voice Assistant Quick Access Button
+              Card(
+                elevation: 4,
+                color: Colors.blue.shade50,
+                child: InkWell(
+                  onTap: () {
+                    // Create a minimal mock trip for today with no specific destination
+                    final mockTrip = Trip(
+                      city: 'Your Day',
+                      origin: _origin.isEmpty ? 'CLT' : _origin,
+                      destination: 'Anywhere',
+                      date: DateFormat('yyyy-MM-dd').format(DateTime.now()),
+                      outboundFlight: '',
+                      outboundStops: 0,
+                      departOrigin: '',
+                      arriveDestination: '',
+                      outboundDuration: '',
+                      outboundPrice: 0.0,
+                      returnFlight: '',
+                      returnStops: 0,
+                      departDestination: '',
+                      arriveOrigin: '',
+                      returnDuration: '',
+                      returnPrice: 0.0,
+                      groundTimeHours: 0.0,
+                      groundTime: '',
+                      totalFlightCost: 0.0,
+                      totalTripTime: '',
+                    );
+                    
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => VoiceAssistantScreen(
+                          trip: mockTrip,
+                          stops: const [],
+                        ),
+                      ),
+                    );
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.blue,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Icon(
+                            Icons.mic,
+                            color: Colors.white,
+                            size: 32,
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Voice Assistant',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.blue,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Ask about weather, traffic, calendar, or plan your day',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.grey.shade700,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const Icon(
+                          Icons.arrow_forward_ios,
+                          color: Colors.blue,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
