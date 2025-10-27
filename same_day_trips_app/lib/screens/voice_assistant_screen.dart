@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:webview_flutter/webview_flutter.dart';
+import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:device_calendar/device_calendar.dart';
 import '../models/trip.dart';
@@ -23,7 +23,7 @@ class VoiceAssistantScreen extends StatefulWidget {
 }
 
 class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> {
-  late final WebViewController _controller;
+  InAppWebViewController? _controller;
   Position? _currentLocation;
   bool _isLoading = true;
   List<Event> _todaysEvents = [];
@@ -115,7 +115,7 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> {
   }
 
   void _sendProactiveMessage(String message) {
-    _controller.runJavaScript('''
+    _controller?.evaluateJavascript(source: '''
       if (window.receiveProactiveMessage) {
         window.receiveProactiveMessage("$message");
       }
@@ -126,15 +126,16 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> {
     try {
       final DeviceCalendarPlugin deviceCalendarPlugin = DeviceCalendarPlugin();
       
-      // Request calendar permissions
-      var permissionsGranted = await deviceCalendarPlugin.hasPermissions();
-      if (permissionsGranted.isSuccess && !permissionsGranted.data!) {
-        permissionsGranted = await deviceCalendarPlugin.requestPermissions();
-        if (!permissionsGranted.isSuccess || !permissionsGranted.data!) {
-          print('⚠️ Calendar permissions denied');
-          return;
-        }
+      // Always request permissions explicitly (don't just check)
+      print('📅 Requesting calendar permissions...');
+      var permissionsGranted = await deviceCalendarPlugin.requestPermissions();
+      
+      if (!permissionsGranted.isSuccess || !permissionsGranted.data!) {
+        print('! Calendar permissions denied');
+        return;
       }
+      
+      print('✅ Calendar permissions granted');
 
       // Get all calendars
       final calendarsResult = await deviceCalendarPlugin.retrieveCalendars();
@@ -142,6 +143,8 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> {
         print('⚠️ Could not retrieve calendars');
         return;
       }
+
+      print('📅 Found ${calendarsResult.data!.length} calendars');
 
       // Get today's events from all calendars
       final now = DateTime.now();
@@ -275,78 +278,19 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> {
   }
 
   void _initializeWebView() {
-    final url = _buildWebViewUrl();
-    print('🌐 Loading WebView URL: $url');
-    
-    _controller = WebViewController()
-      ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..enableZoom(false)
-      ..setNavigationDelegate(
-        NavigationDelegate(
-          onPageStarted: (String url) {
-            print('🌐 Page started loading: $url');
-          },
-          onPageFinished: (String url) {
-            print('🌐 Page finished loading: $url');
-            setState(() {
-              _isLoading = false;
-            });
-            _setupJavaScriptChannels();
-            
-            // Check if mic is available
-            _controller.runJavaScript('''
-              navigator.mediaDevices.getUserMedia({audio: true})
-                .then(() => console.log('✅ Microphone access granted'))
-                .catch(err => console.error('❌ Microphone access denied:', err.message));
-            ''');
-          },
-          onWebResourceError: (error) {
-            print('❌ WebView error: ${error.description}');
-          },
-        ),
-      )
-      ..setOnConsoleMessage((message) {
-        print('🌐 WebView Console: ${message.message}');
-      })
-      ..loadRequest(url);
+    // InAppWebView initialization happens in the build method
+    print('🌐 Preparing InAppWebView...');
   }
 
   void _setupJavaScriptChannels() {
     // Set up navigation channel for voice assistant to call Google Maps
-    _controller.runJavaScript('''
+    _controller?.evaluateJavascript(source: '''
       window.launchNavigation = async function(destination, waypoints) {
         console.log('🗺️ Launching navigation:', destination, waypoints);
         // Flutter will intercept this
         return true;
       };
     ''');
-    
-    // Add JavaScript channel to handle navigation requests
-    _controller.addJavaScriptChannel(
-      'FlutterNavigation',
-      onMessageReceived: (JavaScriptMessage message) async {
-        try {
-          final data = jsonDecode(message.message);
-          final String destination = data['destination'] ?? '';
-          final List<String> waypoints = data['waypoints'] != null 
-              ? List<String>.from(data['waypoints']) 
-              : [];
-          
-          if (destination.isNotEmpty) {
-            if (waypoints.isEmpty) {
-              await NavigationService.launchNavigation(destination);
-            } else {
-              await NavigationService.launchNavigationWithWaypoints(
-                destination: destination,
-                waypoints: waypoints,
-              );
-            }
-          }
-        } catch (e) {
-          print('⚠️ Error handling navigation request: $e');
-        }
-      },
-    );
   }
 
   Uri _buildWebViewUrl() {
@@ -414,7 +358,7 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> {
 
   void _updateLocationInWebView(Position position) {
     // Send location update to web app via JavaScript
-    _controller.runJavaScript('''
+    _controller?.evaluateJavascript(source: '''
       if (window.updateLocation) {
         window.updateLocation(${position.latitude}, ${position.longitude});
       }
@@ -440,7 +384,7 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> {
 
     final calendarJson = jsonEncode(eventsData).replaceAll("'", "\\'");
     
-    _controller.runJavaScript('''
+    _controller?.evaluateJavascript(source: '''
       if (window.updateCalendar) {
         window.updateCalendar($calendarJson);
       }
@@ -449,6 +393,8 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final url = _buildWebViewUrl();
+    
     return Scaffold(
       appBar: AppBar(
         title: const Text('Voice Assistant'),
@@ -458,14 +404,77 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> {
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: () {
-              _controller.reload();
+              _controller?.reload();
             },
           ),
         ],
       ),
       body: Stack(
         children: [
-          WebViewWidget(controller: _controller),
+          InAppWebView(
+            initialUrlRequest: URLRequest(url: WebUri.uri(url)),
+            initialSettings: InAppWebViewSettings(
+              javaScriptEnabled: true,
+              mediaPlaybackRequiresUserGesture: false,
+              allowsInlineMediaPlayback: true,
+              javaScriptCanOpenWindowsAutomatically: true,
+            ),
+            onWebViewCreated: (controller) {
+              _controller = controller;
+              print('🌐 InAppWebView created');
+              
+              // Add JavaScript handler for navigation
+              controller.addJavaScriptHandler(
+                handlerName: 'FlutterNavigation',
+                callback: (args) async {
+                  try {
+                    final data = args[0];
+                    final String destination = data['destination'] ?? '';
+                    final List<String> waypoints = data['waypoints'] != null 
+                        ? List<String>.from(data['waypoints']) 
+                        : [];
+                    
+                    if (destination.isNotEmpty) {
+                      if (waypoints.isEmpty) {
+                        await NavigationService.launchNavigation(destination);
+                      } else {
+                        await NavigationService.launchNavigationWithWaypoints(
+                          destination: destination,
+                          waypoints: waypoints,
+                        );
+                      }
+                    }
+                  } catch (e) {
+                    print('⚠️ Error handling navigation request: $e');
+                  }
+                },
+              );
+            },
+            onLoadStart: (controller, url) {
+              print('🌐 Page started loading: $url');
+            },
+            onLoadStop: (controller, url) async {
+              print('🌐 Page finished loading: $url');
+              setState(() {
+                _isLoading = false;
+              });
+              _setupJavaScriptChannels();
+            },
+            onConsoleMessage: (controller, consoleMessage) {
+              print('🌐 WebView Console: ${consoleMessage.message}');
+            },
+            onPermissionRequest: (controller, request) async {
+              print('🔐 Permission request: ${request.resources}');
+              // Automatically grant microphone and other permissions
+              return PermissionResponse(
+                resources: request.resources,
+                action: PermissionResponseAction.GRANT,
+              );
+            },
+            onReceivedError: (controller, request, error) {
+              print('❌ WebView error: ${error.description}');
+            },
+          ),
           if (_isLoading)
             const Center(
               child: CircularProgressIndicator(),

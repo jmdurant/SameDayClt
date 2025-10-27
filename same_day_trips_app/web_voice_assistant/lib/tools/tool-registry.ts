@@ -687,10 +687,10 @@ ${forecast}
 
 /**
  * Tool implementation for tracking flights via FlightAware API.
+ * Uses Firebase Cloud Function proxy to avoid CORS issues.
  */
 const trackFlight: ToolImplementation = async (args, context) => {
   const { flightNumber, date } = args;
-  const FLIGHTAWARE_API_KEY = 'G3wJ4zeoOPTjGNpT5ZFnqbB4CmeGygEi';
 
   if (!flightNumber) {
     return 'Flight number is required to track a flight.';
@@ -700,24 +700,20 @@ const trackFlight: ToolImplementation = async (args, context) => {
   const cleanFlightNumber = (flightNumber as string).replace(/\s+/g, '').toUpperCase();
 
   try {
-    // FlightAware AeroAPI v4 endpoint
-    const apiUrl = `https://aeroapi.flightaware.com/aeroapi/flights/${cleanFlightNumber}`;
-
-    const params = new URLSearchParams();
-    if (date) {
-      params.append('start', date as string);
-      params.append('end', date as string);
-    }
-    params.append('max_pages', '1');
-
-    const url = `${apiUrl}${params.toString() ? '?' + params.toString() : ''}`;
-
-    const response = await fetch(url, {
-      method: 'GET',
+    // Use Firebase Cloud Function proxy instead of calling FlightAware directly
+    const functionUrl = 'https://us-central1-samedaytrips.cloudfunctions.net/flightawareProxy';
+    
+    const response = await fetch(functionUrl, {
+      method: 'POST',
       headers: {
-        'x-apikey': FLIGHTAWARE_API_KEY,
-        'Accept': 'application/json',
+        'Content-Type': 'application/json',
       },
+      body: JSON.stringify({
+        flightNumber: cleanFlightNumber,
+        start: date as string || undefined,
+        end: date as string || undefined,
+        maxPages: 1,
+      }),
     });
 
     if (!response.ok) {
