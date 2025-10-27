@@ -459,7 +459,29 @@ const getDirections: ToolImplementation = async (args, context) => {
   
   const url = `${baseUrl}?${params.toString()}`;
 
-  // This will open a new tab.
+  // Check if Flutter navigation is available (Android Auto / mobile)
+  if ((window as any).FlutterNavigation) {
+    try {
+      const waypointsList = waypoints && Array.isArray(waypoints) ? waypoints : [];
+      (window as any).FlutterNavigation.postMessage(JSON.stringify({
+        destination: destination,
+        waypoints: waypointsList
+      }));
+      
+      useLogStore.getState().addTurn({
+        role: 'system',
+        text: `Launching Google Maps navigation to ${destination}${waypointsList.length > 0 ? ` with ${waypointsList.length} waypoint(s)` : ''}`,
+        isFinal: true,
+      });
+
+      return `I've launched navigation to ${destination} in Google Maps.${waypointsList.length > 0 ? ` Your route includes ${waypointsList.length} stop(s).` : ''}`;
+    } catch (e) {
+      console.error('Error launching Flutter navigation:', e);
+      // Fall back to opening in new tab
+    }
+  }
+
+  // Fallback: Open in new tab (for web browser)
   window.open(url, '_blank');
   
   useLogStore.getState().addTurn({

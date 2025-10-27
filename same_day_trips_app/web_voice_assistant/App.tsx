@@ -69,10 +69,128 @@ function AppComponent() {
   const [padding, setPadding] = useState<[number, number, number, number]>([0.05, 0.05, 0.05, 0.35]);
   const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null);
   const [isPopupVisible, setIsPopupVisible] = useState(true);
+  const [tripContext, setTripContext] = useState<string | null>(null);
 
   const consolePanelRef = useRef<HTMLDivElement>(null);
   const controlTrayRef = useRef<HTMLElement>(null);
   const trafficLayerRef = useRef<google.maps.TrafficLayer | null>(null);
+
+  // Read URL parameters from Flutter app
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    
+    // Get location from URL
+    const lat = params.get('lat');
+    const lng = params.get('lng');
+    if (lat && lng) {
+      setUserLocation({ lat: parseFloat(lat), lng: parseFloat(lng) });
+    }
+    
+    // Build trip context from URL parameters
+    const city = params.get('city');
+    const origin = params.get('origin');
+    const dest = params.get('dest');
+    const date = params.get('date');
+    const stops = params.get('stops');
+    const calendar = params.get('calendar');
+    
+    if (city || origin || dest) {
+      let context = `Trip Context:\n`;
+      if (city) context += `City: ${city}\n`;
+      if (origin) context += `Origin: ${origin}\n`;
+      if (dest) context += `Destination: ${dest}\n`;
+      if (date) context += `Date: ${date}\n`;
+      if (params.get('outboundFlight')) {
+        context += `\nOutbound Flight: ${params.get('outboundFlight')}\n`;
+        context += `Departs: ${params.get('departOrigin')}\n`;
+        context += `Arrives: ${params.get('arriveDestination')}\n`;
+      }
+      if (params.get('returnFlight')) {
+        context += `\nReturn Flight: ${params.get('returnFlight')}\n`;
+        context += `Departs: ${params.get('departDestination')}\n`;
+        context += `Arrives: ${params.get('arriveOrigin')}\n`;
+      }
+      if (stops) {
+        try {
+          const stopsData = JSON.parse(stops);
+          context += `\nPlanned Stops:\n`;
+          stopsData.forEach((stop: any, i: number) => {
+            context += `${i + 1}. ${stop.name} - ${stop.duration} minutes\n`;
+          });
+        } catch (e) {
+          console.error('Error parsing stops:', e);
+        }
+      }
+      if (calendar) {
+        try {
+          const calendarEvents = JSON.parse(calendar);
+          if (calendarEvents.length > 0) {
+            context += `\nToday's Calendar Events:\n`;
+            calendarEvents.forEach((event: any, i: number) => {
+              const startTime = event.start ? new Date(event.start).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : '';
+              const endTime = event.end ? new Date(event.end).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : '';
+              context += `${i + 1}. ${event.title}`;
+              if (startTime) context += ` (${startTime}${endTime ? ` - ${endTime}` : ''})`;
+              if (event.location) context += ` @ ${event.location}`;
+              context += `\n`;
+            });
+          }
+        } catch (e) {
+          console.error('Error parsing calendar:', e);
+        }
+      }
+      setTripContext(context);
+      console.log('📍 Trip context loaded:', context);
+    }
+    
+    // Set up window function for Flutter to update location
+    (window as any).updateLocation = (lat: number, lng: number) => {
+      setUserLocation({ lat, lng });
+      console.log('📍 Location updated from Flutter:', lat, lng);
+    };
+
+    // Set up window function for Flutter to update calendar
+    (window as any).updateCalendar = (calendarEvents: any[]) => {
+      try {
+        let calendarContext = `\nToday's Calendar Events:\n`;
+        calendarEvents.forEach((event: any, i: number) => {
+          const startTime = event.start ? new Date(event.start).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : '';
+          const endTime = event.end ? new Date(event.end).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : '';
+          calendarContext += `${i + 1}. ${event.title}`;
+          if (startTime) calendarContext += ` (${startTime}${endTime ? ` - ${endTime}` : ''})`;
+          if (event.location) calendarContext += ` @ ${event.location}`;
+          calendarContext += `\n`;
+        });
+        
+        // Update trip context with new calendar
+        setTripContext(prev => {
+          if (!prev) return calendarContext;
+          // Remove old calendar section if exists
+          const baseContext = prev.split('\nToday\'s Calendar Events:')[0];
+          return baseContext + calendarContext;
+        });
+        
+        console.log('📅 Calendar updated from Flutter:', calendarEvents.length, 'events');
+      } catch (e) {
+        console.error('Error updating calendar:', e);
+      }
+    };
+
+    // Set up window function for Flutter to send proactive messages
+    (window as any).receiveProactiveMessage = (message: string) => {
+      console.log('🔔 Proactive message from Flutter:', message);
+      
+      // Add the proactive message to the conversation log
+      useLogStore.getState().addTurn({
+        role: 'system',
+        text: `Proactive Check-in:\n${message}`,
+        isFinal: true,
+      });
+      
+      // Optional: You could also trigger the assistant to speak the message
+      // This would require access to the Live API client to send text-to-speech
+    };
+  }, []);
 
   useEffect(() => {
     if (geocodingLib) {
@@ -87,6 +205,12 @@ function AppComponent() {
   }, [map3d, maps3dLib, elevationLib]);
   
   useEffect(() => {
+    // Only get geolocation if not already provided by Flutter app
+    if (userLocation) {
+      console.log('📍 Using location from Flutter app');
+      return;
+    }
+    
     navigator.geolocation.getCurrentPosition(
       (position) => {
         const { latitude, longitude } = position.coords;
@@ -213,10 +337,11 @@ function AppComponent() {
         apiKey={API_KEY} 
         map={map3d} 
         placesLib={placesLib} 
-        elevationLib={elevationLib} 
-        geocoder={geocoder} 
+        elevationLib={elevationLib}
+        geocoder={geocoder}
         padding={padding}
-        userLocation={userLocation}>
+        userLocation={userLocation}
+        tripContext={tripContext}>
       {isPopupVisible && <PopUp onClose={() => setIsPopupVisible(false)} />}
       <div className="streaming-console">
         <div className="map-panel">

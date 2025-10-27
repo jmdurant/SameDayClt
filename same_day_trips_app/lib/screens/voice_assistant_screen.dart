@@ -1,9 +1,12 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:device_calendar/device_calendar.dart';
 import '../models/trip.dart';
 import '../models/stop.dart';
+import '../services/navigation_service.dart';
 
 class VoiceAssistantScreen extends StatefulWidget {
   final Trip trip;
@@ -23,12 +26,147 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> {
   late final WebViewController _controller;
   Position? _currentLocation;
   bool _isLoading = true;
+  List<Event> _todaysEvents = [];
+
+  Timer? _proactiveCheckTimer;
 
   @override
   void initState() {
     super.initState();
     _initializeWebView();
     _initializeLocation();
+    _initializeCalendar();
+    _startProactiveChecks();
+  }
+
+  @override
+  void dispose() {
+    _proactiveCheckTimer?.cancel();
+    super.dispose();
+  }
+
+  void _startProactiveChecks() {
+    // Check every 5 minutes for proactive suggestions
+    _proactiveCheckTimer = Timer.periodic(const Duration(minutes: 5), (timer) {
+      _checkForProactivePrompts();
+    });
+  }
+
+  void _checkForProactivePrompts() {
+    if (!mounted) return;
+
+    final now = DateTime.now();
+    
+    // Check if near a calendar event
+    for (var event in _todaysEvents) {
+      if (event.start == null) continue;
+      
+      final minutesUntilEvent = event.start!.difference(now).inMinutes;
+      
+      // Alert 30 minutes before event
+      if (minutesUntilEvent > 25 && minutesUntilEvent <= 30) {
+        _sendProactiveMessage(
+          "You have '${event.title}' in 30 minutes${event.location != null ? ' at ${event.location}' : ''}. Need help getting there?"
+        );
+        break;
+      }
+      
+      // Alert if running late
+      if (minutesUntilEvent > 0 && minutesUntilEvent <= 10 && _currentLocation != null && event.location != null) {
+        _sendProactiveMessage(
+          "Your event '${event.title}' starts in $minutesUntilEvent minutes. Should I check traffic?"
+        );
+        break;
+      }
+    }
+    
+    // Check if it's lunch time (11:30-12:30) and no lunch event
+    final hour = now.hour;
+    final minute = now.minute;
+    if (hour == 11 && minute >= 30 || hour == 12 && minute <= 30) {
+      final hasLunchEvent = _todaysEvents.any((e) {
+        final title = e.title?.toLowerCase() ?? '';
+        return title.contains('lunch') || title.contains('eat');
+      });
+      
+      if (!hasLunchEvent) {
+        _sendProactiveMessage(
+          "It's lunchtime! Want me to find nearby restaurants?"
+        );
+      }
+    }
+  }
+
+  void _sendProactiveMessage(String message) {
+    _controller.runJavaScript('''
+      if (window.receiveProactiveMessage) {
+        window.receiveProactiveMessage("$message");
+      }
+    ''');
+  }
+
+  Future<void> _initializeCalendar() async {
+    try {
+      final DeviceCalendarPlugin deviceCalendarPlugin = DeviceCalendarPlugin();
+      
+      // Request calendar permissions
+      var permissionsGranted = await deviceCalendarPlugin.hasPermissions();
+      if (permissionsGranted.isSuccess && !permissionsGranted.data!) {
+        permissionsGranted = await deviceCalendarPlugin.requestPermissions();
+        if (!permissionsGranted.isSuccess || !permissionsGranted.data!) {
+          print('⚠️ Calendar permissions denied');
+          return;
+        }
+      }
+
+      // Get all calendars
+      final calendarsResult = await deviceCalendarPlugin.retrieveCalendars();
+      if (!calendarsResult.isSuccess || calendarsResult.data == null) {
+        print('⚠️ Could not retrieve calendars');
+        return;
+      }
+
+      // Get today's events from all calendars
+      final now = DateTime.now();
+      final startOfDay = DateTime(now.year, now.month, now.day);
+      final endOfDay = DateTime(now.year, now.month, now.day, 23, 59, 59);
+
+      List<Event> allEvents = [];
+      for (var calendar in calendarsResult.data!) {
+        final eventsResult = await deviceCalendarPlugin.retrieveEvents(
+          calendar.id,
+          RetrieveEventsParams(startDate: startOfDay, endDate: endOfDay),
+        );
+        if (eventsResult.isSuccess && eventsResult.data != null) {
+          allEvents.addAll(eventsResult.data!);
+        }
+      }
+
+      // Sort by start time
+      allEvents.sort((a, b) {
+        final aStart = a.start ?? DateTime.now();
+        final bStart = b.start ?? DateTime.now();
+        return aStart.compareTo(bStart);
+      });
+
+      setState(() {
+        _todaysEvents = allEvents;
+      });
+
+      print('📅 Loaded ${allEvents.length} calendar events for today');
+      
+      // Send calendar to web view after it loads
+      Future.delayed(const Duration(seconds: 2), () {
+        _updateCalendarInWebView();
+      });
+    } catch (e) {
+      print('⚠️ Calendar error: $e');
+    }
+  }
+
+  void _refreshCalendar() async {
+    // Refresh calendar and send updates to web view
+    await _initializeCalendar();
   }
 
   Future<void> _initializeLocation() async {
@@ -82,10 +220,49 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> {
             setState(() {
               _isLoading = false;
             });
+            _setupJavaScriptChannels();
           },
         ),
       )
       ..loadRequest(_buildWebViewUrl());
+  }
+
+  void _setupJavaScriptChannels() {
+    // Set up navigation channel for voice assistant to call Google Maps
+    _controller.runJavaScript('''
+      window.launchNavigation = async function(destination, waypoints) {
+        console.log('🗺️ Launching navigation:', destination, waypoints);
+        // Flutter will intercept this
+        return true;
+      };
+    ''');
+    
+    // Add JavaScript channel to handle navigation requests
+    _controller.addJavaScriptChannel(
+      'FlutterNavigation',
+      onMessageReceived: (JavaScriptMessage message) async {
+        try {
+          final data = jsonDecode(message.message);
+          final String destination = data['destination'] ?? '';
+          final List<String> waypoints = data['waypoints'] != null 
+              ? List<String>.from(data['waypoints']) 
+              : [];
+          
+          if (destination.isNotEmpty) {
+            if (waypoints.isEmpty) {
+              await NavigationService.launchNavigation(destination);
+            } else {
+              await NavigationService.launchNavigationWithWaypoints(
+                destination: destination,
+                waypoints: waypoints,
+              );
+            }
+          }
+        } catch (e) {
+          print('⚠️ Error handling navigation request: $e');
+        }
+      },
+    );
   }
 
   Uri _buildWebViewUrl() {
@@ -129,10 +306,26 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> {
       params['stops'] = jsonEncode(stopsData);
     }
 
-    // TODO: Update this URL to where your web app is served
-    // For development: http://localhost:5173
-    // For production: wherever you deploy the web app
-    return Uri.parse('http://localhost:5173').replace(queryParameters: params);
+    // Add calendar events as JSON
+    if (_todaysEvents.isNotEmpty) {
+      final eventsData = _todaysEvents.map((event) {
+        final start = event.start;
+        final end = event.end;
+        return {
+          'title': event.title ?? 'Untitled Event',
+          'start': start?.toIso8601String(),
+          'end': end?.toIso8601String(),
+          if (event.location != null && event.location!.isNotEmpty) 
+            'location': event.location,
+          if (event.description != null && event.description!.isNotEmpty)
+            'description': event.description,
+        };
+      }).toList();
+
+      params['calendar'] = jsonEncode(eventsData);
+    }
+
+    return Uri.parse('https://samedaytrips.web.app').replace(queryParameters: params);
   }
 
   void _updateLocationInWebView(Position position) {
@@ -140,6 +333,32 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> {
     _controller.runJavaScript('''
       if (window.updateLocation) {
         window.updateLocation(${position.latitude}, ${position.longitude});
+      }
+    ''');
+  }
+
+  void _updateCalendarInWebView() {
+    if (_todaysEvents.isEmpty) return;
+    
+    final eventsData = _todaysEvents.map((event) {
+      final start = event.start;
+      final end = event.end;
+      return {
+        'title': event.title ?? 'Untitled Event',
+        'start': start?.toIso8601String(),
+        'end': end?.toIso8601String(),
+        if (event.location != null && event.location!.isNotEmpty) 
+          'location': event.location,
+        if (event.description != null && event.description!.isNotEmpty)
+          'description': event.description,
+      };
+    }).toList();
+
+    final calendarJson = jsonEncode(eventsData).replaceAll("'", "\\'");
+    
+    _controller.runJavaScript('''
+      if (window.updateCalendar) {
+        window.updateCalendar($calendarJson);
       }
     ''');
   }

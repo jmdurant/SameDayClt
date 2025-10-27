@@ -33,6 +33,7 @@ export type LiveAPIProviderProps = {
   geocoder: google.maps.Geocoder | null;
   padding: [number, number, number, number];
   userLocation: {lat: number, lng: number} | null;
+  tripContext?: string | null;
 };
 
 export const LiveAPIProvider: FC<LiveAPIProviderProps> = ({
@@ -43,9 +44,10 @@ export const LiveAPIProvider: FC<LiveAPIProviderProps> = ({
   elevationLib,
   geocoder,
   padding,
-  userLocation
+  userLocation,
+  tripContext
 }) => {
-  const liveAPI = useLiveApi({ apiKey, map, placesLib, elevationLib, geocoder, padding, userLocation });
+  const liveAPI = useLiveApi({ apiKey, map, placesLib, elevationLib, geocoder, padding, userLocation, tripContext });
 
   return (
     <LiveAPIContext.Provider value={liveAPI}>

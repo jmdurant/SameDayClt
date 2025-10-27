@@ -25,11 +25,11 @@
 
 
 import { MutableRefObject, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { GenAILiveClient } from '../../lib/genai-live-client';
+import { GenAILiveClient } from '../lib/genai-live-client';
 import { LiveConnectConfig, Modality, LiveServerToolCall } from '@google/genai';
-import { AudioStreamer } from '../../lib/audio-streamer';
-import { audioContext } from '../../lib/utils';
-import VolMeterWorket from '../../lib/worklets/vol-meter';
+import { AudioStreamer } from '../lib/audio-streamer';
+import { audioContext } from '../lib/utils';
+import VolMeterWorket from '../lib/worklets/vol-meter';
 import { useLogStore, useMapStore, useSettings } from '../lib/state';
 import { GenerateContentResponse, GroundingChunk } from '@google/genai';
 import { ToolContext, toolRegistry } from '../lib/tools/tool-registry';
@@ -64,7 +64,8 @@ export function useLiveApi({
  elevationLib,
  geocoder,
  padding,
- userLocation
+ userLocation,
+ tripContext
 }: {
  apiKey: string;
  map: google.maps.maps3d.Map3DElement | null;
@@ -73,6 +74,7 @@ export function useLiveApi({
  geocoder: google.maps.Geocoder | null;
  padding: [number, number, number, number];
  userLocation: {lat: number, lng: number} | null;
+ tripContext?: string | null;
 }): UseLiveApiResults {
  const { model } = useSettings();
  const client = useMemo(() => new GenAILiveClient(apiKey, model), [apiKey, model]);
@@ -300,12 +302,23 @@ export function useLiveApi({
  const connect = useCallback(async () => {
    if (!config) {
      throw new Error('config has not been set');
-   }
-   useLogStore.getState().clearTurns();
-   useMapStore.getState().clearMarkers();
-   client.disconnect();
-   await client.connect(config);
- }, [client, config]);
+  }
+  useLogStore.getState().clearTurns();
+  useMapStore.getState().clearMarkers();
+  client.disconnect();
+  await client.connect(config);
+  
+  // Send trip context as initial message if available
+  if (tripContext) {
+    setTimeout(() => {
+      useLogStore.getState().addTurn({
+        role: 'system',
+        text: `Context from Flutter app:\n${tripContext}`,
+        isFinal: true,
+      });
+    }, 500);
+  }
+}, [client, config, tripContext]);
 
 
  const disconnect = useCallback(async () => {

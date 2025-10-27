@@ -36,12 +36,12 @@ class TripSearchService {
       return [];
     }
 
-    // Step 2: Search destinations with rate limiting (avoid 429 errors)
-    print('⚡ Searching ${destinations.length} destinations (batched to avoid rate limits)...');
+    // Step 2: Search destinations with optimized rate limiting for production
+    print('⚡ Searching ${destinations.length} destinations (optimized for production rate limits)...');
     final allTrips = <Trip>[];
 
-    // Process in batches of 3 to avoid overwhelming API
-    const batchSize = 3;
+    // Process in larger batches - production allows 40 TPS vs 10 TPS in test
+    const batchSize = 12; // Increased from 3 to take advantage of production limits
     for (var i = 0; i < destinations.length; i += batchSize) {
       final batch = destinations.skip(i).take(batchSize).toList();
 
@@ -53,9 +53,9 @@ class TripSearchService {
       final batchResults = await Future.wait(batchFutures);
       allTrips.addAll(batchResults.expand((trips) => trips));
 
-      // Small delay between batches to respect rate limits
+      // Minimal delay between batches - production allows 1 request per 100ms
       if (i + batchSize < destinations.length) {
-        await Future.delayed(Duration(milliseconds: 500));
+        await Future.delayed(Duration(milliseconds: 150)); // Reduced from 500ms
       }
     }
 
@@ -222,7 +222,7 @@ class TripSearchService {
       ),
       turoUrl: null,
       turoSearchUrl: _generateTuroSearchUrl(
-        destination.city,
+        destination.code, // Use airport code instead of city name for better Turo location matching
         date,
         _amadeus.formatTime(outbound.arriveTime),
         _amadeus.formatTime(returnFlight.departTime),

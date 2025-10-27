@@ -5,7 +5,7 @@ import '../models/stop.dart';
 /// Gemini AI service with Google Maps grounding via direct REST API
 class GeminiService {
   static const String geminiApiBaseUrl = 'https://generativelanguage.googleapis.com/v1beta';
-  static const String apiKey = 'YOUR_GOOGLE_AI_API_KEY'; // TODO: Replace with your key
+  static const String apiKey = 'AIzaSyC2bYM_bvHi9j9e8UPWFGlf_HH-ahBW1EU';
 
   final Dio _dio = Dio(BaseOptions(
     baseUrl: geminiApiBaseUrl,
@@ -96,7 +96,7 @@ Provide helpful, location-specific recommendations for their trip.''';
 
       // Call Gemini API
       final response = await _dio.post(
-        '/models/gemini-2.0-flash-exp:generateContent?key=$apiKey',
+        '/models/gemini-2.5-flash:generateContent?key=$apiKey',
         data: requestBody,
       );
 

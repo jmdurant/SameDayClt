@@ -6,28 +6,25 @@ plugins {
 }
 
 android {
-    namespace = "com.example.same_day_trips_app"
-    compileSdk = flutter.compileSdkVersion
+    namespace = "com.samedaytrips.same_day_trips_app"
+    compileSdk = 36  // Android 16 (API 36)
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
+        sourceCompatibility = JavaVersion.VERSION_21
+        targetCompatibility = JavaVersion.VERSION_21
     }
 
     kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_11.toString()
+        jvmTarget = JavaVersion.VERSION_21.toString()
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.example.same_day_trips_app"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
-        targetSdk = flutter.targetSdkVersion
-        versionCode = flutter.versionCode
-        versionName = flutter.versionName
+        applicationId = "com.samedaytrips.same_day_trips_app"
+        minSdk = 26  // Android 8.0 (required for Android Auto)
+        targetSdk = 36  // Android 16 (latest)
+        versionCode = 1
+        versionName = "1.0.0"
     }
 
     buildTypes {

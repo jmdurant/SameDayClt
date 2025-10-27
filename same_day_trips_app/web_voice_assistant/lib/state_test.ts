@@ -11,7 +11,7 @@ import {
   GroundingChunk,
 } from '@google/genai';
 import { Map3DCameraProps } from '../components/map-3d';
-import { itineraryPlannerTools } from './tools/itinerary-planner';
+// import { itineraryPlannerTools } from
 import {
   getSystemInstructions,
   getScavengerHuntPrompt,
@@ -19,16 +19,7 @@ import {
   getDefaultLiveApiModel,
   getDefaultVoice,
 } from './constants';
-
-export type Template = 'itinerary-planner';
-
-export interface FunctionCall {
-  name: string;
-  description?: string;
-  parameters?: any;
-  isEnabled: boolean;
-  scheduling?: FunctionResponseScheduling;
-}
+import type { Template, FunctionCall } from './types';
 
 function getToolsets(): Record<Template, FunctionCall[]> {
   return {
@@ -77,7 +68,7 @@ export function getPersonas(): Record<string, { prompt: string; voice: string }>
 /**
  * Settings
  */
-type SettingsStore = {
+export const useSettings = create<{
   systemPrompt: string;
   model: string;
   voice: string;
@@ -88,9 +79,7 @@ type SettingsStore = {
   setVoice: (voice: string) => void;
   setPersona: (persona: string) => void;
   activateEasterEggMode: () => void;
-};
-
-export const useSettings = create<SettingsStore>(set => ({
+})(set => ({
   systemPrompt: getSystemPrompts()['itinerary-planner'],
   model: getDefaultLiveApiModel(),
   voice: 'Charon', // Professional voice for business mode
@@ -151,7 +140,7 @@ export const useTools = create<{
   template: Template;
   setTemplate: (template: Template) => void;
 }>(set => ({
-  tools: getToolsets()['itinerary-planner'],
+  tools: [],
   template: 'itinerary-planner',
   setTemplate: (template: Template) => {
     set({ tools: getToolsets()[template], template });
