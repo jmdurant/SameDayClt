@@ -76,9 +76,9 @@ export function useLiveApi({
  userLocation: {lat: number, lng: number} | null;
  tripContext?: string | null;
 }): UseLiveApiResults {
- const { model } = useSettings();
- const client = useMemo(() => new GenAILiveClient(apiKey, model), [apiKey, model]);
- const directionsLib = useMapsLibrary('directions');
+  const { model } = useSettings();
+  const client = useMemo(() => new GenAILiveClient(apiKey, model), [apiKey, model]);
+  const directionsLib = useMapsLibrary('directions');
 
 
  const audioStreamerRef = useRef<AudioStreamer | null>(null);
@@ -199,18 +199,17 @@ export function useLiveApi({
      useLogStore.getState().setIsAwaitingFunctionResponse(true);
      try {
        const functionResponses: any[] = [];
-       const toolContext: ToolContext = {
-         apiKey,
-         map,
-         placesLib,
-         elevationLib,
-         geocoder,
-         directionsLib,
-         padding,
-         setHeldGroundedResponse,
-         setHeldGroundingChunks,
-         userLocation
-       };
+      const toolContext: ToolContext = {
+        apiKey,
+        map,
+        placesLib,
+        elevationLib,
+        geocoder,
+        padding,
+        setHeldGroundedResponse,
+        setHeldGroundingChunks,
+        userLocation
+      };
 
 
        for (const fc of toolCall.functionCalls) {
@@ -296,7 +295,7 @@ export function useLiveApi({
      client.off('toolcall', onToolCall);
      client.off('generationcomplete', onGenerationComplete);
    };
- }, [client, apiKey, map, placesLib, elevationLib, geocoder, directionsLib, padding, userLocation, setHeldGroundedResponse, setHeldGroundingChunks]);
+ }, [client, apiKey, map, placesLib, elevationLib, geocoder, padding, userLocation, setHeldGroundedResponse, setHeldGroundingChunks]);
 
 
  const connect = useCallback(async () => {

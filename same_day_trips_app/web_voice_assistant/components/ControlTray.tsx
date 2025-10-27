@@ -69,6 +69,18 @@ function ControlTray({trayRef, onToggleTraffic, isTrafficVisible}: ControlTrayPr
     useLiveAPIContext();
   const setCameraTarget = useMapStore(state => state.setCameraTarget);
 
+  // Auto-connect on mount
+  useEffect(() => {
+    connect();
+  }, [connect]);
+
+  // Auto-unmute mic when connected
+  useEffect(() => {
+    if (connected) {
+      setMuted(false);
+    }
+  }, [connected]);
+
   useEffect(() => {
     if (audioStreamer.current) {
       audioStreamer.current.gainNode.gain.value = speakerMuted ? 0 : 1;

@@ -38,7 +38,6 @@ export interface ToolContext {
   placesLib: google.maps.PlacesLibrary | null;
   elevationLib: google.maps.ElevationLibrary | null;
   geocoder: google.maps.Geocoder | null;
-  directionsLib: google.maps.DirectionsLibrary | null;
   padding: [number, number, number, number];
   userLocation: {lat: number; lng: number} | null;
   setHeldGroundedResponse: (

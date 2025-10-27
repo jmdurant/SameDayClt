@@ -34,9 +34,26 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> {
   void initState() {
     super.initState();
     _initializeWebView();
-    _initializeLocation();
-    _initializeCalendar();
+    _initializeLocationAndCalendar();
     _startProactiveChecks();
+  }
+  
+  Future<void> _initializeLocationAndCalendar() async {
+    // Initialize location first, then send to WebView
+    await _initializeLocation();
+    await _initializeCalendar();
+    
+    // After both are loaded, send initial data to WebView
+    Future.delayed(const Duration(seconds: 2), () {
+      if (_currentLocation != null) {
+        print('📍 Sending initial location to WebView: ${_currentLocation!.latitude}, ${_currentLocation!.longitude}');
+        _updateLocationInWebView(_currentLocation!);
+      }
+      if (_todaysEvents.isNotEmpty) {
+        print('📅 Sending initial calendar to WebView');
+        _updateCalendarInWebView();
+      }
+    });
   }
 
   @override
@@ -154,11 +171,6 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> {
       });
 
       print('📅 Loaded ${allEvents.length} calendar events for today');
-      
-      // Send calendar to web view after it loads
-      Future.delayed(const Duration(seconds: 2), () {
-        _updateCalendarInWebView();
-      });
     } catch (e) {
       print('⚠️ Calendar error: $e');
     }
@@ -263,19 +275,40 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> {
   }
 
   void _initializeWebView() {
+    final url = _buildWebViewUrl();
+    print('🌐 Loading WebView URL: $url');
+    
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..enableZoom(false)
       ..setNavigationDelegate(
         NavigationDelegate(
+          onPageStarted: (String url) {
+            print('🌐 Page started loading: $url');
+          },
           onPageFinished: (String url) {
+            print('🌐 Page finished loading: $url');
             setState(() {
               _isLoading = false;
             });
             _setupJavaScriptChannels();
+            
+            // Check if mic is available
+            _controller.runJavaScript('''
+              navigator.mediaDevices.getUserMedia({audio: true})
+                .then(() => console.log('✅ Microphone access granted'))
+                .catch(err => console.error('❌ Microphone access denied:', err.message));
+            ''');
+          },
+          onWebResourceError: (error) {
+            print('❌ WebView error: ${error.description}');
           },
         ),
       )
-      ..loadRequest(_buildWebViewUrl());
+      ..setOnConsoleMessage((message) {
+        print('🌐 WebView Console: ${message.message}');
+      })
+      ..loadRequest(url);
   }
 
   void _setupJavaScriptChannels() {
