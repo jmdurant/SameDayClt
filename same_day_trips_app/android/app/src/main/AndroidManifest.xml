@@ -52,6 +52,10 @@
     <!-- Calendar permissions -->
     <uses-permission android:name="android.permission.READ_CALENDAR" />
     
+    <!-- Microphone permission for WebView voice assistant -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    
     <!-- Android Auto feature -->
     <uses-feature
         android:name="android.hardware.type.automotive"
