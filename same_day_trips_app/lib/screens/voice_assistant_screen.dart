@@ -296,6 +296,9 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> {
   Uri _buildWebViewUrl() {
     // Build URL with trip context and location
     final params = <String, String>{
+      // Cache busting parameter to force reload of new version
+      'v': DateTime.now().millisecondsSinceEpoch.toString(),
+      
       // Basic trip info
       'city': widget.trip.city,
       'origin': widget.trip.origin,

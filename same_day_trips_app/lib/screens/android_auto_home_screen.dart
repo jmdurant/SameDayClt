@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:intl/intl.dart';
 import '../models/trip.dart';
 import '../models/stop.dart';
 import 'voice_assistant_screen.dart';
@@ -25,12 +26,17 @@ class _AndroidAutoHomeScreenState extends State<AndroidAutoHomeScreen> {
   Future<void> _loadActiveTrip() async {
     // TODO: Load today's active trip from local storage or API
     // For now, create a mock trip for Android Auto testing
+    
+    // Use today's date in yyyy-MM-dd format for FlightAware API compatibility (10-day limit)
+    final today = DateTime.now();
+    final dateStr = DateFormat('yyyy-MM-dd').format(today);
+    
     setState(() {
       _activeTrip = Trip(
         city: 'Atlanta',
         origin: 'CLT',
         destination: 'ATL',
-        date: DateTime.now().toString().split(' ')[0],
+        date: dateStr,
         outboundFlight: 'AA 1234',
         outboundStops: 0,
         departOrigin: '8:00 AM',

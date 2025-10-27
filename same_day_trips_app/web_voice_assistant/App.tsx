@@ -145,7 +145,16 @@ function AppComponent() {
     
     // Set up window function for Flutter to update location
     (window as any).updateLocation = (lat: number, lng: number) => {
-      setUserLocation({ lat, lng });
+      const location = { lat, lng };
+      setUserLocation(location);
+      // Also fly the camera to the new location
+      setCameraTarget({
+        center: { ...location, altitude: 1000 },
+        range: 5000,
+        tilt: 45,
+        heading: 0,
+        roll: 0,
+      });
       console.log('📍 Location updated from Flutter:', lat, lng);
     };
 
