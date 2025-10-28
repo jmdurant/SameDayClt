@@ -601,6 +601,67 @@ const sendToNavigation: ToolImplementation = async (args, context) => {
 };
 
 /**
+ * Tool implementation for adding a calendar event.
+ */
+const addCalendarEvent: ToolImplementation = async (args, context) => {
+  const { title, startTime, endTime, location, description } = args;
+  
+  console.log('📅 Adding calendar event:', { title, startTime, endTime, location, description });
+  
+  // Validate ISO 8601 format
+  const startDate = new Date(startTime);
+  const endDate = new Date(endTime);
+  
+  if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+    return `I couldn't add the event because the time format is invalid. Please provide times in ISO 8601 format (e.g., "2025-10-28T14:00:00").`;
+  }
+  
+  if (endDate <= startDate) {
+    return `I couldn't add the event because the end time must be after the start time.`;
+  }
+  
+  // Send to Flutter via JavaScript channel
+  if ((window as any).FlutterCalendar) {
+    try {
+      const eventData = {
+        title: title,
+        startTime: startTime,
+        endTime: endTime,
+        location: location || '',
+        description: description || ''
+      };
+      
+      (window as any).FlutterCalendar.postMessage(JSON.stringify(eventData));
+      
+      // Format the time for user-friendly confirmation
+      const startTimeFormatted = startDate.toLocaleString('en-US', {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true
+      });
+      
+      let confirmMessage = `I've added "${title}" to your calendar on ${startTimeFormatted}`;
+      if (location) {
+        confirmMessage += ` at ${location}`;
+      }
+      confirmMessage += '.';
+      
+      return confirmMessage;
+    } catch (error) {
+      console.error('❌ Error adding calendar event:', error);
+      return `I encountered an error while trying to add the event to your calendar. Please try again.`;
+    }
+  } else {
+    // Fallback for web browser (not in Flutter WebView)
+    console.warn('⚠️ FlutterCalendar not available, running in web browser');
+    return `Calendar integration is only available in the mobile app. The event details are: "${title}" from ${startTime} to ${endTime}${location ? ` at ${location}` : ''}.`;
+  }
+};
+
+/**
  * Tool implementation for checking the user's (mock) calendar.
  */
 const getTodaysCalendarEvents: ToolImplementation = async (args, context) => {
@@ -663,9 +724,29 @@ const getTravelTime: ToolImplementation = async (args, context) => {
 
   const directionsService = new google.maps.DirectionsService();
 
+  // Ensure locations include city/state for better geocoding
+  // If origin/destination don't have a comma and aren't coordinates, append ", Charlotte, NC"
+  const formatLocation = (loc: string): string => {
+    // Check if it's already coordinates (lat,lng format)
+    if (/^-?\d+\.?\d*\s*,\s*-?\d+\.?\d*$/.test(loc)) {
+      return loc;
+    }
+    // If it already has city info (contains comma), use as-is
+    if (loc.includes(',')) {
+      return loc;
+    }
+    // Otherwise, append Charlotte, NC as default
+    return `${loc}, Charlotte, NC`;
+  };
+
+  const formattedOrigin = formatLocation(origin);
+  const formattedDestination = formatLocation(destination);
+
+  console.log(`🗺️ getTravelTime: origin="${formattedOrigin}" destination="${formattedDestination}"`);
+
   const request: google.maps.DirectionsRequest = {
-    origin,
-    destination,
+    origin: formattedOrigin,
+    destination: formattedDestination,
     travelMode: travelMode.toUpperCase() as google.maps.TravelMode,
     drivingOptions: {
       departureTime: new Date(),
@@ -677,7 +758,19 @@ const getTravelTime: ToolImplementation = async (args, context) => {
     const response = await directionsService.route(request);
 
     if (response.status !== 'OK' || !response.routes || response.routes.length === 0) {
-      return `I couldn't find a route from ${origin} to ${destination}. Status: ${response.status}`;
+      console.warn(`⚠️ Directions API returned status: ${response.status}`);
+      
+      // Provide detailed explanation of what went wrong
+      let explanation = `I couldn't calculate travel time because `;
+      if (response.status === 'NOT_FOUND') {
+        explanation += `I couldn't find one or both of these locations:\n- Origin: "${formattedOrigin}"\n- Destination: "${formattedDestination}"\n\nThis usually means the location name is too vague or doesn't have an address. Please ask the user for a more specific address or landmark.`;
+      } else if (response.status === 'ZERO_RESULTS') {
+        explanation += `there's no route available between "${formattedOrigin}" and "${formattedDestination}". They might be too far apart or inaccessible by the selected travel mode.`;
+      } else {
+        explanation += `of an issue with the directions service (Status: ${response.status}).`;
+      }
+      
+      return explanation;
     }
 
     const leg = response.routes[0].legs[0];
@@ -689,8 +782,18 @@ const getTravelTime: ToolImplementation = async (args, context) => {
       return 'Could not determine the travel time.';
     }
   } catch (error) {
-    console.error('Error calling Directions API via JS SDK:', error);
-    return 'There was an error calculating the travel time.';
+    console.error('❌ Error calling Directions API via JS SDK:', error);
+    // Provide a more helpful error message
+    const errorMsg = (error as any)?.message || 'Unknown error';
+    
+    let explanation = `I couldn't calculate travel time. `;
+    if (errorMsg.includes('NOT_FOUND') || errorMsg.includes('geocoded')) {
+      explanation += `The problem is that I couldn't find one or both of these locations:\n- Origin: "${formattedOrigin}"\n- Destination: "${formattedDestination}"\n\nThis often happens when:\n1. A calendar event doesn't have a location/address\n2. The location name is too vague (e.g., just "Meeting" or "Conference")\n3. The address is incomplete\n\nPlease ask the user for a specific address like "123 Main St, Charlotte, NC" or a well-known landmark.`;
+    } else {
+      explanation += `Error details: ${errorMsg}`;
+    }
+    
+    return explanation;
   }
 };
 
@@ -970,6 +1073,7 @@ export const toolRegistry: Record<string, ToolImplementation> = {
   frameLocations,
   getDirections,
   sendToNavigation,
+  addCalendarEvent,
   getTodaysCalendarEvents,
   getTravelTime,
   getWeatherForecast,

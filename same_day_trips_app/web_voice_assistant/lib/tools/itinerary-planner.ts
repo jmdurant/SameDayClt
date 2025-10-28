@@ -168,6 +168,38 @@ export const itineraryPlannerTools: FunctionCall[] = [
     scheduling: FunctionResponseScheduling.INTERRUPT,
   },
   {
+    name: 'addCalendarEvent',
+    description: 'Adds a new event to the user\'s calendar. Use this when the user asks to schedule something, add an event, or when you suggest a time for an activity and they agree. Always confirm the details before adding.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        title: {
+          type: 'STRING',
+          description: 'The title/name of the event (e.g., "Coffee break", "Lunch at Blue Restaurant", "Flight to NYC")'
+        },
+        startTime: {
+          type: 'STRING',
+          description: 'Start time in ISO 8601 format (e.g., "2025-10-28T14:00:00"). Must include date and time.'
+        },
+        endTime: {
+          type: 'STRING',
+          description: 'End time in ISO 8601 format (e.g., "2025-10-28T15:00:00"). Must include date and time.'
+        },
+        location: {
+          type: 'STRING',
+          description: 'Optional location/address for the event (e.g., "Starbucks, 123 Main St, Charlotte, NC")'
+        },
+        description: {
+          type: 'STRING',
+          description: 'Optional notes or description for the event'
+        }
+      },
+      required: ['title', 'startTime', 'endTime'],
+    },
+    isEnabled: true,
+    scheduling: FunctionResponseScheduling.INTERRUPT,
+  },
+  {
     name: 'getTodaysCalendarEvents',
     description: "Checks the user's calendar for today's events to help with planning. Call this at the beginning of the conversation to see if there are any existing plans to work around.",
     parameters: {

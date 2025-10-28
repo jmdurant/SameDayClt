@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:device_calendar/device_calendar.dart';
+import 'package:timezone/timezone.dart';
 import '../models/trip.dart';
 import '../models/stop.dart';
 import '../services/navigation_service.dart';
@@ -188,6 +189,82 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> {
       print('📅 Loaded ${allEvents.length} calendar events for today');
     } catch (e) {
       print('⚠️ Calendar error: $e');
+    }
+  }
+
+  Future<void> _addCalendarEvent({
+    required String title,
+    required DateTime startTime,
+    required DateTime endTime,
+    String? location,
+    String? description,
+  }) async {
+    try {
+      final DeviceCalendarPlugin deviceCalendarPlugin = DeviceCalendarPlugin();
+      
+      // Get all calendars
+      final calendarsResult = await deviceCalendarPlugin.retrieveCalendars();
+      if (!calendarsResult.isSuccess || calendarsResult.data == null || calendarsResult.data!.isEmpty) {
+        print('⚠️ No calendars available to add event');
+        return;
+      }
+
+      // Find the primary calendar (or use the first writable one)
+      Calendar? targetCalendar;
+      for (var calendar in calendarsResult.data!) {
+        if (calendar.isDefault == true || targetCalendar == null) {
+          targetCalendar = calendar;
+        }
+        if (calendar.isDefault == true) break; // Prefer default calendar
+      }
+
+      if (targetCalendar == null) {
+        print('⚠️ No writable calendar found');
+        return;
+      }
+
+      print('📅 Adding event to calendar: ${targetCalendar.name}');
+
+      // Create the event
+      final Event event = Event(
+        targetCalendar.id,
+        title: title,
+        start: TZDateTime.from(startTime, getLocation('America/New_York')),
+        end: TZDateTime.from(endTime, getLocation('America/New_York')),
+        location: location,
+        description: description,
+      );
+
+      // Add the event
+      final createEventResult = await deviceCalendarPlugin.createOrUpdateEvent(event);
+      
+      if (createEventResult?.isSuccess == true) {
+        print('✅ Successfully added calendar event: $title');
+        
+        // Show a snackbar confirmation to the user
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Added "$title" to your calendar'),
+              duration: const Duration(seconds: 3),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } else {
+        print('⚠️ Failed to add calendar event: ${createEventResult?.errors}');
+      }
+    } catch (e) {
+      print('⚠️ Error adding calendar event: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to add event to calendar'),
+            duration: const Duration(seconds: 3),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
@@ -443,6 +520,47 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> {
                     }
                   } catch (e) {
                     print('⚠️ Error handling navigation request: $e');
+                  }
+                },
+              );
+              
+              // Add JavaScript handler for adding calendar events
+              controller.addJavaScriptHandler(
+                handlerName: 'FlutterCalendar',
+                callback: (args) async {
+                  try {
+                    final data = args[0];
+                    final String title = data['title'] ?? '';
+                    final String startTimeStr = data['startTime'] ?? '';
+                    final String endTimeStr = data['endTime'] ?? '';
+                    final String location = data['location'] ?? '';
+                    final String description = data['description'] ?? '';
+                    
+                    if (title.isEmpty || startTimeStr.isEmpty || endTimeStr.isEmpty) {
+                      print('⚠️ Calendar event missing required fields');
+                      return;
+                    }
+                    
+                    // Parse ISO 8601 dates
+                    final startTime = DateTime.parse(startTimeStr);
+                    final endTime = DateTime.parse(endTimeStr);
+                    
+                    print('📅 Adding calendar event: $title from $startTime to $endTime');
+                    
+                    // Create the event
+                    await _addCalendarEvent(
+                      title: title,
+                      startTime: startTime,
+                      endTime: endTime,
+                      location: location,
+                      description: description,
+                    );
+                    
+                    // Refresh the calendar events list
+                    await _initializeCalendar();
+                    
+                  } catch (e) {
+                    print('⚠️ Error handling calendar event request: $e');
                   }
                 },
               );
