@@ -25,7 +25,7 @@
 
 import { GenerateContentResponse, GroundingChunk } from '@google/genai';
 import { fetchMapsGroundedResponseREST } from '../maps-grounding';
-import { MapMarker, useLogStore, useMapStore } from '../state';
+import { MapMarker, useLogStore, useMapStore, useUI } from '../state';
 import { lookAtWithPadding } from '../look-at';
 
 /**
@@ -446,50 +446,158 @@ const getDirections: ToolImplementation = async (args, context) => {
     return 'Origin and destination are required to get directions.';
   }
 
+  // Check if Google Maps is loaded
+  if (typeof google === 'undefined' || !google.maps || !google.maps.DirectionsService) {
+    return 'Google Maps is not loaded yet. Please try again in a moment.';
+  }
+
+  // Switch to 2D map mode (DirectionsService only works with 2D maps)
+  if ((window as any).switchTo2DMap) {
+    await (window as any).switchTo2DMap();
+    useLogStore.getState().addTurn({
+      role: 'system',
+      text: `Switching to 2D map to show directions and traffic...`,
+      isFinal: true,
+    });
+  }
+
+  // Use DirectionsService to calculate the route
+  const directionsService = new google.maps.DirectionsService();
+
+  const request: google.maps.DirectionsRequest = {
+    origin,
+    destination,
+    travelMode: travelMode.toUpperCase() as google.maps.TravelMode,
+  };
+
+  if (waypoints && Array.isArray(waypoints) && waypoints.length > 0) {
+    request.waypoints = waypoints.map(wp => ({
+      location: wp,
+      stopover: true,
+    }));
+  }
+
+  try {
+    const response = await directionsService.route(request);
+
+    if (response.status !== 'OK' || !response.routes || response.routes.length === 0) {
+      return `I couldn't find a route from ${origin} to ${destination}. Status: ${response.status}`;
+    }
+
+    // Render the directions on the 2D map (map2d is returned from switchTo2DMap promise)
+    // Note: switchTo2DMap was already awaited above, so map2d should be available
+    const map2d = (window as any).getMap2D ? (window as any).getMap2D() : null;
+    
+    if (map2d) {
+      // Create a new DirectionsRenderer or reuse existing one
+      if (!(window as any).__directionsRenderer) {
+        (window as any).__directionsRenderer = new google.maps.DirectionsRenderer({
+          suppressMarkers: false,
+          polylineOptions: {
+            strokeColor: '#4285F4',
+            strokeWeight: 5,
+          }
+        });
+      }
+      const directionsRenderer = (window as any).__directionsRenderer;
+      directionsRenderer.setMap(map2d);
+      directionsRenderer.setDirections(response);
+      
+      console.log('🗺️ Route rendered on 2D map');
+      useLogStore.getState().addTurn({
+        role: 'system',
+        text: `Route displayed on the map`,
+        isFinal: true,
+      });
+    } else {
+      console.warn('2D map not available for rendering directions');
+    }
+
+    const route = response.routes[0];
+    const leg = route.legs[0];
+    const distance = leg.distance?.text || 'unknown distance';
+    const duration = leg.duration?.text || 'unknown duration';
+
+    // Build the navigation URL for the "Start Navigation" button
+    const baseUrl = 'https://www.google.com/maps/dir/';
+    const params = new URLSearchParams();
+    params.append('api', '1');
+    params.append('origin', origin);
+    params.append('destination', destination);
+    if (waypoints && Array.isArray(waypoints) && waypoints.length > 0) {
+      params.append('waypoints', waypoints.join('|'));
+    }
+    params.append('travelmode', travelMode);
+    const navUrl = `${baseUrl}?${params.toString()}`;
+
+    // Store navigation data for the button
+    (window as any).__navigationData = {
+      destination,
+      waypoints: waypoints && Array.isArray(waypoints) ? waypoints : [],
+      url: navUrl,
+    };
+
+    // Store navigation launcher function for the floating button
+    (window as any).__launchNavigation = () => {
+      if ((window as any).FlutterNavigation) {
+        (window as any).FlutterNavigation.postMessage(JSON.stringify({
+          destination: destination,
+          waypoints: waypoints || []
+        }));
+      } else {
+        window.open(navUrl, '_blank');
+      }
+      // Hide button after launching
+      if ((window as any).showNavigationButton) {
+        (window as any).showNavigationButton(false);
+      }
+    };
+    
+    // Show the floating navigation button
+    console.log('🔘 Attempting to show navigation button...');
+    if ((window as any).showNavigationButton) {
+      console.log('✅ showNavigationButton function exists, calling it');
+      (window as any).showNavigationButton(true);
+      console.log('✅ Navigation button should now be visible');
+    } else {
+      console.error('❌ showNavigationButton function not found on window');
+    }
+
+    return `Route found: ${distance}, ${duration}. The route is now displayed on the map with traffic information. Click the "Start Navigation" button on the map to launch turn-by-turn navigation in Google Maps.`;
+  } catch (error) {
+    console.error('Error getting directions:', error);
+    return `An error occurred while getting directions: ${error}`;
+  }
+};
+
+/**
+ * Tool implementation for sending route to native navigation app.
+ */
+const sendToNavigation: ToolImplementation = async (args, context) => {
+  const { destination, waypoints = [] } = args;
+  
+  // Build the navigation URL
   const baseUrl = 'https://www.google.com/maps/dir/';
   const params = new URLSearchParams();
   params.append('api', '1');
-  params.append('origin', origin);
   params.append('destination', destination);
   if (waypoints && Array.isArray(waypoints) && waypoints.length > 0) {
     params.append('waypoints', waypoints.join('|'));
   }
-  params.append('travelmode', travelMode);
+  params.append('travelmode', 'driving');
+  const navUrl = `${baseUrl}?${params.toString()}`;
   
-  const url = `${baseUrl}?${params.toString()}`;
-
-  // Check if Flutter navigation is available (Android Auto / mobile)
+  // Launch navigation
   if ((window as any).FlutterNavigation) {
-    try {
-      const waypointsList = waypoints && Array.isArray(waypoints) ? waypoints : [];
-      (window as any).FlutterNavigation.postMessage(JSON.stringify({
-        destination: destination,
-        waypoints: waypointsList
-      }));
-      
-      useLogStore.getState().addTurn({
-        role: 'system',
-        text: `Launching Google Maps navigation to ${destination}${waypointsList.length > 0 ? ` with ${waypointsList.length} waypoint(s)` : ''}`,
-        isFinal: true,
-      });
-
-      return `I've launched navigation to ${destination} in Google Maps.${waypointsList.length > 0 ? ` Your route includes ${waypointsList.length} stop(s).` : ''}`;
-    } catch (e) {
-      console.error('Error launching Flutter navigation:', e);
-      // Fall back to opening in new tab
-    }
+    (window as any).FlutterNavigation.postMessage(JSON.stringify({
+      destination: destination,
+      waypoints: waypoints
+    }));
+    return `Navigation launched! Opening Google Maps to navigate to ${destination}.`;
+  } else {
+    window.open(navUrl, '_blank');
+    return `Opening Google Maps in a new tab to navigate to ${destination}.`;
   }
-
-  // Fallback: Open in new tab (for web browser)
-  window.open(url, '_blank');
-  
-  useLogStore.getState().addTurn({
-    role: 'system',
-    text: `Opening directions in new tab: ${url}`,
-    isFinal: true,
-  });
-
-  return `I've opened the directions from ${origin} to ${destination} in a new tab for you.`;
 };
 
 /**
@@ -523,7 +631,7 @@ ${JSON.stringify(mockEvents, null, 2)}
  */
 const getTravelTime: ToolImplementation = async (args, context) => {
   let { origin, destination, travelMode = 'driving' } = args;
-  const { directionsLib, userLocation } = context;
+  const { userLocation } = context;
   const isCurrentLocation = /^(my location|current location|here|my position)$/i.test(origin);
 
   if (isCurrentLocation && userLocation) {
@@ -541,8 +649,9 @@ const getTravelTime: ToolImplementation = async (args, context) => {
     return 'Origin and destination are required to calculate travel time.';
   }
 
-  if (!directionsLib) {
-    const errorMessage = 'Directions service is not available.';
+  // DirectionsService is part of core Google Maps API, no library needed
+  if (typeof google === 'undefined' || !google.maps || !google.maps.DirectionsService) {
+    const errorMessage = 'Google Maps is not loaded yet. Please try again in a moment.';
     console.error(errorMessage);
     useLogStore.getState().addTurn({
       role: 'system',
@@ -552,7 +661,7 @@ const getTravelTime: ToolImplementation = async (args, context) => {
     return errorMessage;
   }
 
-  const directionsService = new directionsLib.DirectionsService();
+  const directionsService = new google.maps.DirectionsService();
 
   const request: google.maps.DirectionsRequest = {
     origin,
@@ -860,6 +969,7 @@ export const toolRegistry: Record<string, ToolImplementation> = {
   frameEstablishingShot,
   frameLocations,
   getDirections,
+  sendToNavigation,
   getTodaysCalendarEvents,
   getTravelTime,
   getWeatherForecast,

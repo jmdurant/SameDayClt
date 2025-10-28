@@ -45,10 +45,6 @@ declare module '@vis.gl/react-google-maps' {
   export function useMapsLibrary(
     name: 'geocoding'
   ): google.maps.GeocodingLibrary | null;
-  // Add overload for 'directions' library
-  export function useMapsLibrary(
-    name: 'directions'
-  ): google.maps.DirectionsLibrary | null;
 }
 
 // temporary fix until @types/google.maps is updated with the latest changes

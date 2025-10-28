@@ -1,9 +1,39 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'screens/search_screen.dart';
 import 'screens/android_auto_home_screen.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  // Request critical permissions upfront for better UX
+  // WebRTC permissions (required for voice assistant)
+  await Permission.camera.request();
+  await Permission.microphone.request();
+  
+  // Location permission (required for trip context and map features)
+  // Request both fine and coarse location for better compatibility
+  await Permission.location.request();
+  await Permission.locationWhenInUse.request();
+  
+  // NOTE: We do NOT request locationAlways (background location) upfront
+  // as it can cause permission issues in Android Auto and is not needed
+  // for the core functionality of the voice assistant
+  
+  // Calendar permissions (for trip planning and scheduling)
+  await Permission.calendar.request();
+  
+  // Bluetooth permissions (for audio routing in Android Auto)
+  // These are optional - the app works without them
+  await Permission.bluetooth.request();
+  await Permission.bluetoothConnect.request();
+  
+  // Notification permissions (Android 13+) - optional for future features
+  if (await Permission.notification.isDenied) {
+    await Permission.notification.request();
+  }
+  
   runApp(const SameDayTripsApp());
 }
 

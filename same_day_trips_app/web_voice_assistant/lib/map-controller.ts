@@ -67,7 +67,133 @@ export class MapController {
         title: markerData.label,
         drawsWhenOccluded: true,
       });
+      
+      // Add click handler to show directions popup
+      marker.addEventListener('gmp-click', () => {
+        this.showMarkerPopup(markerData);
+      });
+      
       this.map.appendChild(marker);
+    }
+  }
+  
+  /**
+   * Shows a popup for a marker with directions option
+   * @param markerData - The marker data to show popup for
+   */
+  private showMarkerPopup(markerData: MapMarker) {
+    // Store the selected marker for the directions function to use
+    (window as any).__selectedMarker = markerData;
+    
+    // Create and show a visual popup on the map
+    this.createInfoWindow(markerData);
+    
+    console.log(`🗺️ Marker clicked: ${markerData.label} at ${markerData.position.lat}, ${markerData.position.lng}`);
+  }
+  
+  /**
+   * Creates an info window popup for a marker
+   * @param markerData - The marker data to display in the popup
+   */
+  private createInfoWindow(markerData: MapMarker) {
+    // Remove any existing popup
+    const existingPopup = document.getElementById('marker-info-popup');
+    if (existingPopup) {
+      existingPopup.remove();
+    }
+    
+    // Create popup container - positioned in center of map (above POIs)
+    const popup = document.createElement('div');
+    popup.id = 'marker-info-popup';
+    popup.style.cssText = `
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: white;
+      padding: 20px;
+      border-radius: 16px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+      z-index: 1000;
+      max-width: 320px;
+      animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    `;
+    
+    // Add animation keyframes
+    if (!document.getElementById('popup-animations')) {
+      const style = document.createElement('style');
+      style.id = 'popup-animations';
+      style.textContent = `
+        @keyframes popIn {
+          from { 
+            transform: translate(-50%, -50%) scale(0.8); 
+            opacity: 0; 
+          }
+          to { 
+            transform: translate(-50%, -50%) scale(1); 
+            opacity: 1; 
+          }
+        }
+      `;
+      document.head.appendChild(style);
+    }
+    
+    // Popup content
+    popup.innerHTML = `
+      <div style="font-size: 16px; font-weight: 600; margin-bottom: 8px; color: #202124;">
+        ${markerData.label}
+      </div>
+      <button id="get-directions-btn" style="
+        width: 100%;
+        padding: 10px;
+        background: #1a73e8;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        margin-bottom: 8px;
+      ">
+        Get Directions
+      </button>
+      <button id="close-popup-btn" style="
+        width: 100%;
+        padding: 10px;
+        background: #f1f3f4;
+        color: #5f6368;
+        border: none;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+      ">
+        Close
+      </button>
+    `;
+    
+    document.body.appendChild(popup);
+    
+    // Add event listeners
+    const directionsBtn = document.getElementById('get-directions-btn');
+    const closeBtn = document.getElementById('close-popup-btn');
+    
+    if (directionsBtn) {
+      directionsBtn.addEventListener('click', () => {
+        popup.remove();
+        // Request directions via Gemini
+        if ((window as any).sendMessageToGemini) {
+          (window as any).sendMessageToGemini(
+            `Get me directions to ${markerData.label} at ${markerData.position.lat}, ${markerData.position.lng}`
+          );
+        }
+      });
+    }
+    
+    if (closeBtn) {
+      closeBtn.addEventListener('click', () => {
+        popup.remove();
+      });
     }
   }
 

@@ -69,10 +69,16 @@ function ControlTray({trayRef, onToggleTraffic, isTrafficVisible}: ControlTrayPr
     useLiveAPIContext();
   const setCameraTarget = useMapStore(state => state.setCameraTarget);
 
-  // Auto-connect on mount
+  // Auto-connect on mount (only if not already connected)
   useEffect(() => {
-    connect();
-  }, [connect]);
+    if (!connected) {
+      // Small delay to ensure clean state
+      const timer = setTimeout(() => {
+        connect();
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [connected, connect]);
 
   // Auto-unmute mic when connected
   useEffect(() => {
@@ -80,6 +86,24 @@ function ControlTray({trayRef, onToggleTraffic, isTrafficVisible}: ControlTrayPr
       setMuted(false);
     }
   }, [connected]);
+
+  // Expose function for marker clicks to send messages to Gemini
+  useEffect(() => {
+    (window as any).sendMessageToGemini = (message: string) => {
+      if (connected && client) {
+        // Add as a user message (creates new bubble in chat)
+        useLogStore.getState().addTurn({
+          role: 'user',
+          text: message,
+          isFinal: true,
+        });
+        client.sendRealtimeText(message);
+      }
+    };
+    return () => {
+      delete (window as any).sendMessageToGemini;
+    };
+  }, [connected, client]);
 
   useEffect(() => {
     if (audioStreamer.current) {

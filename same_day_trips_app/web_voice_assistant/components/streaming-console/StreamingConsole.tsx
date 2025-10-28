@@ -8,6 +8,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { LiveConnectConfig, Modality, LiveServerContent } from '@google/genai';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import rehypeRaw from 'rehype-raw';
 
 import { useLiveAPIContext } from '../../contexts/LiveAPIContext';
 import {
@@ -303,7 +304,7 @@ export default function StreamingConsole() {
                     </div>
                   </div>
                   <div className="transcription-text-content">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{t.text}</ReactMarkdown>
+                    <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>{t.text}</ReactMarkdown>
                   </div>
                 </div>
               )

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:device_calendar/device_calendar.dart';
@@ -33,6 +34,13 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> {
   @override
   void initState() {
     super.initState();
+    // Enable landscape orientation for better Android Auto experience
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.portraitDown,
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+    ]);
     _initializeWebView();
     _initializeLocationAndCalendar();
     _startProactiveChecks();
@@ -59,6 +67,10 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> {
   @override
   void dispose() {
     _proactiveCheckTimer?.cancel();
+    // Reset orientation preferences when leaving the screen
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+    ]);
     super.dispose();
   }
 
@@ -179,11 +191,6 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> {
     }
   }
 
-  void _refreshCalendar() async {
-    // Refresh calendar and send updates to web view
-    await _initializeCalendar();
-  }
-
   Future<void> _initializeLocation() async {
     try {
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
@@ -207,10 +214,8 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> {
         return;
       }
 
+      // Check permission (already requested in main.dart, so just check here)
       LocationPermission permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-      }
 
       if (permission == LocationPermission.denied ||
           permission == LocationPermission.deniedForever) {
@@ -252,10 +257,12 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> {
         ),
       ).listen((Position position) {
         print('📍 Location updated: ${position.latitude}, ${position.longitude}');
+        if (mounted) {
         setState(() {
           _currentLocation = position;
         });
         _updateLocationInWebView(position);
+        }
       });
     } catch (e) {
       print('⚠️ Location error: $e, using fallback location');
@@ -399,19 +406,6 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> {
     final url = _buildWebViewUrl();
     
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Voice Assistant'),
-        backgroundColor: Colors.purple,
-        foregroundColor: Colors.white,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: () {
-              _controller?.reload();
-            },
-          ),
-        ],
-      ),
       body: Stack(
         children: [
           InAppWebView(
@@ -453,19 +447,40 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> {
                 },
               );
             },
+            shouldOverrideUrlLoading: (controller, navigationAction) async {
+              final url = navigationAction.request.url;
+              
+              // Handle intent:// URLs (Android app launch intents)
+              if (url != null && url.scheme == 'intent') {
+                print('🗺️ Intercepted intent URL, preventing WebView navigation');
+                // Don't load intent URLs in WebView, they'll be handled by the system
+                return NavigationActionPolicy.CANCEL;
+              }
+              
+              // Allow all other URLs
+              return NavigationActionPolicy.ALLOW;
+            },
             onLoadStart: (controller, url) {
               print('🌐 Page started loading: $url');
             },
             onLoadStop: (controller, url) async {
               print('🌐 Page finished loading: $url');
-              setState(() {
-                _isLoading = false;
-              });
+              if (mounted) {
+                setState(() {
+                  _isLoading = false;
+                });
+              }
               _setupJavaScriptChannels();
             },
-            onConsoleMessage: (controller, consoleMessage) {
-              print('🌐 WebView Console: ${consoleMessage.message}');
-            },
+                  onConsoleMessage: (controller, consoleMessage) {
+                    // Filter out Google Maps alpha channel warnings
+                    final message = consoleMessage.message;
+                    if (message.contains('alpha channel of the Google Maps JavaScript API') ||
+                        message.contains('For development purposes only')) {
+                      return; // Skip these informational messages
+                    }
+                    print('🌐 WebView Console: $message');
+                  },
             onPermissionRequest: (controller, request) async {
               print('🔐 Permission request: ${request.resources}');
               // Automatically grant microphone and other permissions

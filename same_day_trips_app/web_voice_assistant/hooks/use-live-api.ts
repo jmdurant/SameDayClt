@@ -78,10 +78,8 @@ export function useLiveApi({
 }): UseLiveApiResults {
   const { model } = useSettings();
   const client = useMemo(() => new GenAILiveClient(apiKey, model), [apiKey, model]);
-  const directionsLib = useMapsLibrary('directions');
 
-
- const audioStreamerRef = useRef<AudioStreamer | null>(null);
+  const audioStreamerRef = useRef<AudioStreamer | null>(null);
 
 
  const [volume, setVolume] = useState(0);
