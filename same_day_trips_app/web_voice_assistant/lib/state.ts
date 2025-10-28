@@ -271,6 +271,18 @@ export interface MapMarker {
   };
   label: string;
   showLabel: boolean;
+  // Rich POI data from Google Places
+  placeData?: {
+    placeId?: string;
+    address?: string;
+    rating?: number;
+    userRatingCount?: number;
+    priceLevel?: string;
+    phoneNumber?: string;
+    website?: string;
+    openingHours?: string;
+    types?: string[];
+  };
 }
 
 export const useMapStore = create<{

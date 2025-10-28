@@ -24,6 +24,9 @@ Future<void> main() async {
   // Calendar permissions (for trip planning and scheduling)
   await Permission.calendar.request();
   
+  // Phone permission (for initiating calls to businesses)
+  await Permission.phone.request();
+  
   // Bluetooth permissions (for audio routing in Android Auto)
   // These are optional - the app works without them
   await Permission.bluetooth.request();

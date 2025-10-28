@@ -138,11 +138,45 @@ export class MapController {
       document.head.appendChild(style);
     }
     
-    // Popup content
-    popup.innerHTML = `
-      <div style="font-size: 16px; font-weight: 600; margin-bottom: 8px; color: #202124;">
-        ${markerData.label}
-      </div>
+    // Build POI info HTML
+    const placeData = markerData.placeData;
+    let infoHTML = '';
+    
+    if (placeData) {
+      // Address
+      if (placeData.address) {
+        infoHTML += `<div style="font-size: 13px; color: #5f6368; margin-bottom: 8px;">📍 ${placeData.address}</div>`;
+      }
+      
+      // Rating
+      if (placeData.rating) {
+        const stars = '⭐'.repeat(Math.round(placeData.rating));
+        const ratingCount = placeData.userRatingCount ? ` (${placeData.userRatingCount})` : '';
+        infoHTML += `<div style="font-size: 13px; color: #5f6368; margin-bottom: 8px;">${stars} ${placeData.rating}${ratingCount}</div>`;
+      }
+      
+      // Price Level
+      if (placeData.priceLevel) {
+        const dollars = '$'.repeat(placeData.priceLevel.length || 1);
+        infoHTML += `<div style="font-size: 13px; color: #5f6368; margin-bottom: 8px;">${dollars}</div>`;
+      }
+      
+      // Phone
+      if (placeData.phoneNumber) {
+        infoHTML += `<div style="font-size: 13px; color: #5f6368; margin-bottom: 8px;">📞 ${placeData.phoneNumber}</div>`;
+      }
+      
+      // Website
+      if (placeData.website) {
+        infoHTML += `<div style="font-size: 13px; margin-bottom: 8px;"><a href="${placeData.website}" target="_blank" style="color: #1a73e8; text-decoration: none;">🌐 Website</a></div>`;
+      }
+    }
+    
+    // Build action buttons HTML
+    let actionsHTML = '';
+    
+    // Always show Get Directions button
+    actionsHTML += `
       <button id="get-directions-btn" style="
         width: 100%;
         padding: 10px;
@@ -154,9 +188,39 @@ export class MapController {
         font-weight: 500;
         cursor: pointer;
         margin-bottom: 8px;
+        margin-top: 12px;
       ">
-        Get Directions
+        🧭 Get Directions
       </button>
+    `;
+    
+    // Add Call button if phone number is available
+    if (placeData?.phoneNumber) {
+      actionsHTML += `
+        <button id="call-phone-btn" style="
+          width: 100%;
+          padding: 10px;
+          background: #34a853;
+          color: white;
+          border: none;
+          border-radius: 8px;
+          font-size: 14px;
+          font-weight: 500;
+          cursor: pointer;
+          margin-bottom: 8px;
+        ">
+          📞 Call ${placeData.phoneNumber}
+        </button>
+      `;
+    }
+    
+    // Popup content
+    popup.innerHTML = `
+      <div style="font-size: 16px; font-weight: 600; margin-bottom: 12px; color: #202124;">
+        ${markerData.label}
+      </div>
+      ${infoHTML}
+      ${actionsHTML}
       <button id="close-popup-btn" style="
         width: 100%;
         padding: 10px;
@@ -176,16 +240,33 @@ export class MapController {
     
     // Add event listeners
     const directionsBtn = document.getElementById('get-directions-btn');
+    const callBtn = document.getElementById('call-phone-btn');
     const closeBtn = document.getElementById('close-popup-btn');
     
     if (directionsBtn) {
       directionsBtn.addEventListener('click', () => {
         popup.remove();
-        // Request directions via Gemini
+        // Request directions via Gemini - use coordinates only for precise location
         if ((window as any).sendMessageToGemini) {
           (window as any).sendMessageToGemini(
-            `Get me directions to ${markerData.label} at ${markerData.position.lat}, ${markerData.position.lng}`
+            `Get me directions to ${markerData.position.lat}, ${markerData.position.lng} (${markerData.label})`
           );
+        }
+      });
+    }
+    
+    if (callBtn && placeData?.phoneNumber) {
+      callBtn.addEventListener('click', () => {
+        popup.remove();
+        // Trigger phone call via Flutter or tel: link
+        if ((window as any).flutter_inappwebview) {
+          (window as any).flutter_inappwebview.callHandler('FlutterPhoneCall', {
+            phoneNumber: placeData.phoneNumber,
+            placeName: markerData.label
+          });
+        } else {
+          // Fallback to tel: link for web browsers
+          window.location.href = `tel:${placeData.phoneNumber}`;
         }
       });
     }

@@ -63,7 +63,7 @@ function ControlTray({trayRef, onToggleTraffic, isTrafficVisible}: ControlTrayPr
   const isMobile = useMediaQuery('(max-width: 768px), (orientation: landscape) and (max-height: 768px)');
   const [isTextEntryVisible, setIsTextEntryVisible] = useState(false);
   const isLandscape = useMediaQuery('(orientation: landscape) and (max-height: 768px)');
-
+  
 
   const { client, connected, connect, disconnect, audioStreamer, userLocation } =
     useLiveAPIContext();
@@ -217,6 +217,32 @@ function ControlTray({trayRef, onToggleTraffic, isTrafficVisible}: ControlTrayPr
   const micButtonTitle = muted ? 'Unmute microphone' : 'Mute microphone';
 
   const connectButtonTitle = connected ? 'Stop streaming' : 'Start streaming';
+
+  // DEBUG: Log control tray rendering
+  useEffect(() => {
+    console.log('🎛️ ControlTray rendered');
+    console.log('🎛️ ControlTray ref:', trayRef);
+    console.log('🎛️ Window size:', window.innerWidth, 'x', window.innerHeight);
+    console.log('🎛️ Is portrait?', window.innerHeight > window.innerWidth);
+    console.log('🎛️ Media query (max-width: 768px):', window.matchMedia('(max-width: 768px)').matches);
+    console.log('🎛️ Media query (orientation: portrait):', window.matchMedia('(orientation: portrait)').matches);
+    
+    // Check actual computed styles after render
+    setTimeout(() => {
+      const tray = document.querySelector('.control-tray');
+      if (tray) {
+        const styles = window.getComputedStyle(tray);
+        console.log('🎛️ ControlTray computed position:', styles.position);
+        console.log('🎛️ ControlTray computed bottom:', styles.bottom);
+        console.log('🎛️ ControlTray computed left:', styles.left);
+        console.log('🎛️ ControlTray computed z-index:', styles.zIndex);
+        console.log('🎛️ ControlTray computed display:', styles.display);
+        console.log('🎛️ ControlTray bounding rect:', tray.getBoundingClientRect());
+      } else {
+        console.error('❌ ControlTray element not found in DOM!');
+      }
+    }, 100);
+  }, []);
 
   return (
     <section className="control-tray" ref={trayRef}>

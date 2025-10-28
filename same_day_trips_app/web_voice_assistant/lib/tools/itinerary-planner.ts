@@ -168,6 +168,26 @@ export const itineraryPlannerTools: FunctionCall[] = [
     scheduling: FunctionResponseScheduling.INTERRUPT,
   },
   {
+    name: 'makePhoneCall',
+    description: 'Initiates a phone call to a business or person. Use this when the user explicitly asks to call a place (e.g., "call the restaurant", "phone them", "dial their number"). Do NOT use this proactively - only when the user requests it.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        phoneNumber: {
+          type: 'STRING',
+          description: 'The phone number to call in E.164 format or local format (e.g., "+1-704-555-1234" or "(704) 555-1234")'
+        },
+        placeName: {
+          type: 'STRING',
+          description: 'The name of the business or person being called (e.g., "Higher Grounds Coffee", "Fahrenheit Restaurant")'
+        }
+      },
+      required: ['phoneNumber'],
+    },
+    isEnabled: true,
+    scheduling: FunctionResponseScheduling.INTERRUPT,
+  },
+  {
     name: 'addCalendarEvent',
     description: 'Adds a new event to the user\'s calendar. Use this when the user asks to schedule something, add an event, or when you suggest a time for an activity and they agree. Always confirm the details before adding.',
     parameters: {

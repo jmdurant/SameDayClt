@@ -1006,19 +1006,24 @@ gmp-place-details-compact {
 }
 
 
-/* --- Mobile Responsive Styles --- */
-@media (max-width: 768px) {
+/* --- Mobile Portrait Responsive Styles --- */
+@media (max-width: 768px) and (orientation: portrait) {
+  .streaming-console {
+    overflow: visible !important;
+  }
+
   .console-panel {
     width: 100%;
     min-width: unset;
     max-height: 50%;
-    bottom: 0;
+    bottom: 80px; /* Add space for control tray */
     top: 50%;
     left: 0;
     right: 0;
     border-right: none;
     border-top: 1px solid var(--border-stroke);
     padding-top: 10px;
+    padding-bottom: 10px;
     background: rgba(28, 31, 33, 0.95);
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
@@ -1029,18 +1034,31 @@ gmp-place-details-compact {
     bottom: 50%;
     left: 0;
     right: 0;
+    overflow: visible !important;
   }
 
   .control-tray {
     padding: 5px 5px 5px 5px;
     width: 100%;
-    display: flex;
+    max-width: 100vw;
+    display: flex !important;
     justify-content: center;
-    /* This rule is needed for mobile, but needs to be overridden for desktop */
-    position: relative; 
-    bottom: auto;
-    left: auto;
-    transform: none;
+    position: fixed !important;
+    top: auto !important;
+    bottom: 0px !important; /* Bottom of screen */
+    left: 0 !important;
+    right: 0 !important;
+    transform: none !important;
+    z-index: 100 !important; /* Lower z-index to allow popups above */
+    min-height: 60px !important;
+  }
+
+  .navigation-button {
+    /* Move button down to avoid being cut off in portrait */
+    top: 90px !important;
+    right: 10px !important;
+    padding: 10px 16px !important;
+    font-size: 13px !important;
   }
 
   .actions-nav {
@@ -1118,11 +1136,17 @@ gmp-place-details-compact {
   }
 
   .control-tray {
-    position: absolute;
+    position: fixed;
     bottom: 18px;
-    left: 50%;
+    left: 75%; /* Center of the map area (50% + 25% of remaining 50%) */
     transform: translateX(-50%);
     width: auto;
+    z-index: 100; /* Lower z-index to allow popups above */
+  }
+
+  .navigation-button {
+    /* Move button down to avoid alpha banner in landscape */
+    top: 40px !important;
   }
 
   .actions-nav {

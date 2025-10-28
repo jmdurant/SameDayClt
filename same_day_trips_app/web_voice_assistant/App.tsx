@@ -452,8 +452,8 @@ function AppComponent() {
         apiKey={API_KEY} 
         map={map3d} 
         placesLib={placesLib} 
-        elevationLib={elevationLib}
-        geocoder={geocoder}
+        elevationLib={elevationLib} 
+        geocoder={geocoder} 
         padding={padding}
         userLocation={userLocation}
         tripContext={tripContext}>
@@ -461,11 +461,11 @@ function AppComponent() {
       <div className="streaming-console">
         <div className="map-panel">
           <div style={{display: isTrafficVisible ? 'none' : 'block', width: '100%', height: '100%'}}>
-            <Map3D
-              ref={setMap3d}
-              {...INITIAL_VIEW_PROPS}
-              onCameraChange={handleCameraChange}
-            />
+          <Map3D
+            ref={setMap3d}
+            {...INITIAL_VIEW_PROPS}
+            onCameraChange={handleCameraChange}
+          />
           </div>
           {(() => {
             console.log('🔍 DEBUG JSX: isTrafficVisible=', isTrafficVisible);
@@ -535,6 +535,7 @@ function AppComponent() {
                     return showNavigationButton;
                   })() && (
                     <button
+                      className="navigation-button"
                       onClick={() => {
                         console.log('🔘 Navigation button clicked!');
                         if ((window as any).__launchNavigation) {
@@ -542,7 +543,7 @@ function AppComponent() {
                         }
                       }}
                       style={{
-                        position: 'absolute',
+                        position: 'fixed',
                         top: '20px',
                         right: '20px',
                         padding: '12px 20px',
@@ -579,11 +580,11 @@ function AppComponent() {
             console.log('🔍 DEBUG JSX: NOT rendering <Map> component');
             return null;
           })()}
-          <ControlTray trayRef={controlTrayRef} onToggleTraffic={handleToggleTraffic} isTrafficVisible={isTrafficVisible} />
         </div>
         <div className="console-panel" ref={consolePanelRef}>
           <StreamingConsole />
         </div>
+        <ControlTray trayRef={controlTrayRef} onToggleTraffic={handleToggleTraffic} isTrafficVisible={isTrafficVisible} />
         <ErrorScreen />
         <Sidebar />
       </div>

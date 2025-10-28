@@ -24,17 +24,19 @@ class VoiceAssistantScreen extends StatefulWidget {
   State<VoiceAssistantScreen> createState() => _VoiceAssistantScreenState();
 }
 
-class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> {
+class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> with WidgetsBindingObserver {
   InAppWebViewController? _controller;
   Position? _currentLocation;
   bool _isLoading = true;
   List<Event> _todaysEvents = [];
 
   Timer? _proactiveCheckTimer;
+  StreamSubscription<Position>? _locationSubscription;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     // Enable landscape orientation for better Android Auto experience
     SystemChrome.setPreferredOrientations([
       DeviceOrientation.portraitUp,
@@ -42,32 +44,41 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> {
       DeviceOrientation.landscapeLeft,
       DeviceOrientation.landscapeRight,
     ]);
-    _initializeWebView();
+    // Initialize location and calendar FIRST, then WebView
     _initializeLocationAndCalendar();
     _startProactiveChecks();
   }
   
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    
+    if (state == AppLifecycleState.resumed) {
+      print('📱 App resumed - refreshing location');
+      // Re-send current location to WebView when app resumes
+      if (_currentLocation != null && _controller != null) {
+        _updateLocationInWebView(_currentLocation!);
+      }
+    }
+  }
+  
   Future<void> _initializeLocationAndCalendar() async {
-    // Initialize location first, then send to WebView
+    // Initialize location and calendar first
     await _initializeLocation();
     await _initializeCalendar();
     
-    // After both are loaded, send initial data to WebView
-    Future.delayed(const Duration(seconds: 2), () {
-      if (_currentLocation != null) {
-        print('📍 Sending initial location to WebView: ${_currentLocation!.latitude}, ${_currentLocation!.longitude}');
-        _updateLocationInWebView(_currentLocation!);
-      }
-      if (_todaysEvents.isNotEmpty) {
-        print('📅 Sending initial calendar to WebView');
-        _updateCalendarInWebView();
-      }
-    });
+    print('📍 Location: ${_currentLocation?.latitude}, ${_currentLocation?.longitude}');
+    print('📅 Calendar events: ${_todaysEvents.length}');
+    
+    // NOW initialize WebView with location data available
+    _initializeWebView();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _proactiveCheckTimer?.cancel();
+    _locationSubscription?.cancel();
     // Reset orientation preferences when leaving the screen
     SystemChrome.setPreferredOrientations([
       DeviceOrientation.portraitUp,
@@ -192,6 +203,57 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> {
     }
   }
 
+  Future<void> _makePhoneCall(String phoneNumber, String placeName) async {
+    try {
+      // Clean the phone number (remove formatting)
+      final cleanNumber = phoneNumber.replaceAll(RegExp(r'[^\d+]'), '');
+      final telUrl = 'tel:$cleanNumber';
+      
+      print('📞 Launching phone dialer: $telUrl');
+      
+      if (await canLaunchUrl(Uri.parse(telUrl))) {
+        await launchUrl(
+          Uri.parse(telUrl),
+          mode: LaunchMode.externalApplication,
+        );
+        
+        // Show confirmation
+        if (mounted) {
+          final nameText = placeName.isNotEmpty ? ' $placeName' : '';
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Calling$nameText...'),
+              duration: const Duration(seconds: 2),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } else {
+        print('⚠️ Cannot launch phone dialer for: $telUrl');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Unable to open phone dialer'),
+              duration: const Duration(seconds: 3),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      print('⚠️ Error launching phone dialer: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to initiate call'),
+            duration: const Duration(seconds: 3),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+  
   Future<void> _addCalendarEvent({
     required String title,
     required DateTime startTime,
@@ -326,8 +388,8 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> {
         _currentLocation = position;
       });
 
-      // Update location periodically
-      Geolocator.getPositionStream(
+      // Update location periodically - store subscription for lifecycle management
+      _locationSubscription = Geolocator.getPositionStream(
         locationSettings: const LocationSettings(
           accuracy: LocationAccuracy.high,
           distanceFilter: 100, // Update every 100 meters
@@ -561,6 +623,31 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> {
                     
                   } catch (e) {
                     print('⚠️ Error handling calendar event request: $e');
+                  }
+                },
+              );
+              
+              // Add JavaScript handler for making phone calls
+              controller.addJavaScriptHandler(
+                handlerName: 'FlutterPhoneCall',
+                callback: (args) async {
+                  try {
+                    final data = args[0];
+                    final String phoneNumber = data['phoneNumber'] ?? '';
+                    final String placeName = data['placeName'] ?? '';
+                    
+                    if (phoneNumber.isEmpty) {
+                      print('⚠️ Phone call missing phone number');
+                      return;
+                    }
+                    
+                    print('📞 Initiating phone call to: $phoneNumber ($placeName)');
+                    
+                    // Launch phone dialer
+                    await _makePhoneCall(phoneNumber, placeName);
+                    
+                  } catch (e) {
+                    print('⚠️ Error handling phone call request: $e');
                   }
                 },
               );

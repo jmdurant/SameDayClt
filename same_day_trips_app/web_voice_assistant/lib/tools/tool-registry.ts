@@ -92,7 +92,20 @@ async function fetchPlaceDetailsFromChunks(
   const placesRequests = chunksToProcess.map(chunk => {
     const placeId = chunk.maps!.placeId.replace('places/', '');
     const place = new placesLib.Place({ id: placeId });
-    return place.fetchFields({ fields: ['location', 'displayName'] });
+    return place.fetchFields({ 
+      fields: [
+        'location', 
+        'displayName', 
+        'formattedAddress',
+        'rating',
+        'userRatingCount',
+        'priceLevel',
+        'nationalPhoneNumber',
+        'websiteURI',
+        'regularOpeningHours',
+        'types'
+      ] 
+    });
   });
 
   const locationResults = await Promise.allSettled(placesRequests);
@@ -111,6 +124,12 @@ async function fetchPlaceDetailsFromChunks(
         showLabel = !!(responseText && originalChunk.maps?.title && responseText.includes(originalChunk.maps.title));
       }
 
+      // Extract opening hours text if available
+      let openingHoursText = '';
+      if (place.regularOpeningHours?.weekdayDescriptions) {
+        openingHoursText = place.regularOpeningHours.weekdayDescriptions.join(', ');
+      }
+      
       return {
         position: {
           lat: place.location.lat(),
@@ -119,6 +138,17 @@ async function fetchPlaceDetailsFromChunks(
         },
         label: place.displayName ?? '',
         showLabel,
+        placeData: {
+          placeId: place.id,
+          address: place.formattedAddress,
+          rating: place.rating,
+          userRatingCount: place.userRatingCount,
+          priceLevel: place.priceLevel,
+          phoneNumber: place.nationalPhoneNumber,
+          website: place.websiteURI,
+          openingHours: openingHoursText,
+          types: place.types,
+        },
       };
     })
     .filter((marker): marker is MapMarker => marker !== null);
@@ -519,15 +549,15 @@ const getDirections: ToolImplementation = async (args, context) => {
     const duration = leg.duration?.text || 'unknown duration';
 
     // Build the navigation URL for the "Start Navigation" button
-    const baseUrl = 'https://www.google.com/maps/dir/';
-    const params = new URLSearchParams();
-    params.append('api', '1');
-    params.append('origin', origin);
-    params.append('destination', destination);
-    if (waypoints && Array.isArray(waypoints) && waypoints.length > 0) {
-      params.append('waypoints', waypoints.join('|'));
-    }
-    params.append('travelmode', travelMode);
+  const baseUrl = 'https://www.google.com/maps/dir/';
+  const params = new URLSearchParams();
+  params.append('api', '1');
+  params.append('origin', origin);
+  params.append('destination', destination);
+  if (waypoints && Array.isArray(waypoints) && waypoints.length > 0) {
+    params.append('waypoints', waypoints.join('|'));
+  }
+  params.append('travelmode', travelMode);
     const navUrl = `${baseUrl}?${params.toString()}`;
 
     // Store navigation data for the button
@@ -538,12 +568,13 @@ const getDirections: ToolImplementation = async (args, context) => {
     };
 
     // Store navigation launcher function for the floating button
-    (window as any).__launchNavigation = () => {
-      if ((window as any).FlutterNavigation) {
-        (window as any).FlutterNavigation.postMessage(JSON.stringify({
+    (window as any).__launchNavigation = async () => {
+      if ((window as any).flutter_inappwebview) {
+        await (window as any).flutter_inappwebview.callHandler('FlutterNavigation', {
           destination: destination,
           waypoints: waypoints || []
-        }));
+        });
+        console.log('🧭 Launched navigation to:', destination);
       } else {
         window.open(navUrl, '_blank');
       }
@@ -588,15 +619,50 @@ const sendToNavigation: ToolImplementation = async (args, context) => {
   const navUrl = `${baseUrl}?${params.toString()}`;
   
   // Launch navigation
-  if ((window as any).FlutterNavigation) {
-    (window as any).FlutterNavigation.postMessage(JSON.stringify({
+  if ((window as any).flutter_inappwebview) {
+    await (window as any).flutter_inappwebview.callHandler('FlutterNavigation', {
       destination: destination,
       waypoints: waypoints
-    }));
+    });
     return `Navigation launched! Opening Google Maps to navigate to ${destination}.`;
   } else {
     window.open(navUrl, '_blank');
     return `Opening Google Maps in a new tab to navigate to ${destination}.`;
+  }
+};
+
+/**
+ * Tool implementation for making a phone call.
+ */
+const makePhoneCall: ToolImplementation = async (args, context) => {
+  const { phoneNumber, placeName } = args;
+  
+  console.log('📞 Making phone call:', { phoneNumber, placeName });
+  
+  if (!phoneNumber) {
+    return 'I need a phone number to make the call.';
+  }
+  
+  // Send to Flutter via JavaScript channel
+  if ((window as any).flutter_inappwebview) {
+    try {
+      await (window as any).flutter_inappwebview.callHandler('FlutterPhoneCall', {
+        phoneNumber: phoneNumber,
+        placeName: placeName || ''
+      });
+      
+      const placeText = placeName ? ` ${placeName}` : '';
+      return `Calling${placeText} at ${phoneNumber}...`;
+    } catch (error) {
+      console.error('❌ Error making phone call:', error);
+      return `I encountered an error while trying to initiate the call. Please try dialing ${phoneNumber} manually.`;
+    }
+  } else {
+    // Fallback for web browser (not in Flutter WebView)
+    console.warn('⚠️ FlutterPhoneCall not available, using tel: link');
+    window.location.href = `tel:${phoneNumber}`;
+    const placeText = placeName ? ` ${placeName}` : '';
+    return `Opening phone dialer for${placeText} (${phoneNumber})...`;
   }
 };
 
@@ -607,6 +673,8 @@ const addCalendarEvent: ToolImplementation = async (args, context) => {
   const { title, startTime, endTime, location, description } = args;
   
   console.log('📅 Adding calendar event:', { title, startTime, endTime, location, description });
+  console.log('🔍 DEBUG: Window has flutter_inappwebview?', !!(window as any).flutter_inappwebview);
+  console.log('🔍 DEBUG: Window has FlutterCalendar?', !!(window as any).FlutterCalendar);
   
   // Validate ISO 8601 format
   const startDate = new Date(startTime);
@@ -620,18 +688,19 @@ const addCalendarEvent: ToolImplementation = async (args, context) => {
     return `I couldn't add the event because the end time must be after the start time.`;
   }
   
-  // Send to Flutter via JavaScript channel
-  if ((window as any).FlutterCalendar) {
+  const eventData = {
+    title: title,
+    startTime: startTime,
+    endTime: endTime,
+    location: location || '',
+    description: description || ''
+  };
+  
+  // Try the flutter_inappwebview.callHandler method first
+  if ((window as any).flutter_inappwebview) {
     try {
-      const eventData = {
-        title: title,
-        startTime: startTime,
-        endTime: endTime,
-        location: location || '',
-        description: description || ''
-      };
-      
-      (window as any).FlutterCalendar.postMessage(JSON.stringify(eventData));
+      console.log('🔍 Trying flutter_inappwebview.callHandler...');
+      await (window as any).flutter_inappwebview.callHandler('FlutterCalendar', eventData);
       
       // Format the time for user-friendly confirmation
       const startTimeFormatted = startDate.toLocaleString('en-US', {
@@ -1094,6 +1163,7 @@ export const toolRegistry: Record<string, ToolImplementation> = {
   frameLocations,
   getDirections,
   sendToNavigation,
+  makePhoneCall,
   addCalendarEvent,
   getTodaysCalendarEvents,
   getTravelTime,
