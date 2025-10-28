@@ -58,6 +58,18 @@
     <!-- Phone call permission for initiating calls via tel: URLs -->
     <uses-permission android:name="android.permission.CALL_PHONE" />
     
+    <!-- Query for phone dialer app (Android 11+) -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.DIAL" />
+            <data android:scheme="tel" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="tel" />
+        </intent>
+    </queries>
+    
     <!-- WebRTC permissions for WebView voice assistant -->
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
