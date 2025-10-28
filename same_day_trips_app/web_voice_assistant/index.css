@@ -1011,21 +1011,24 @@ gmp-place-details-compact {
   .console-panel {
     width: 100%;
     min-width: unset;
-    max-height: 90%;
+    max-height: 50%;
     bottom: 0;
-    top: 40%;
+    top: 50%;
     left: 0;
     right: 0;
     border-right: none;
     border-top: 1px solid var(--border-stroke);
     padding-top: 10px;
-    background: rgba(28, 31, 33, 0.85);
+    background: rgba(28, 31, 33, 0.95);
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
   }
 
   .map-panel {
-    bottom: 60%;
+    top: 0;
+    bottom: 50%;
+    left: 0;
+    right: 0;
   }
 
   .control-tray {
