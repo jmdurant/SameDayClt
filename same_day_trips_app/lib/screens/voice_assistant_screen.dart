@@ -6,6 +6,7 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:device_calendar/device_calendar.dart';
 import 'package:timezone/timezone.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../models/trip.dart';
 import '../models/stop.dart';
 import '../services/navigation_service.dart';
