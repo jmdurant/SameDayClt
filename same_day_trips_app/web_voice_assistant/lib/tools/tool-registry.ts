@@ -666,11 +666,32 @@ const addCalendarEvent: ToolImplementation = async (args, context) => {
  */
 const getTodaysCalendarEvents: ToolImplementation = async (args, context) => {
   // In a real application, this would involve an OAuth flow and a call to the Google Calendar API.
-  // For this demo, we'll return a hardcoded list of mock events to simulate the functionality.
+  // For this demo, we'll return a hardcoded list of mock events with real Charlotte addresses.
   const mockEvents = [
-    { summary: 'Morning Coffee & Planning', start: '09:00 AM', end: '09:30 AM' },
-    { summary: 'Dentist Appointment', start: '2:00 PM', end: '3:00 PM' },
-    { summary: 'Pick up groceries', start: '5:30 PM', end: '6:00 PM' },
+    { 
+      summary: 'Morning Coffee', 
+      start: '09:00 AM', 
+      end: '09:30 AM',
+      location: 'Amelie\'s French Bakery, 2424 N Davidson St, Charlotte, NC 28205'
+    },
+    { 
+      summary: 'Lunch Meeting', 
+      start: '12:00 PM', 
+      end: '1:00 PM',
+      location: 'Fahrenheit Restaurant, 201 S College St, Charlotte, NC 28202'
+    },
+    { 
+      summary: 'Dentist Appointment', 
+      start: '2:30 PM', 
+      end: '3:30 PM',
+      location: 'Charlotte Center for Cosmetic Dentistry, 1618 E 4th St, Charlotte, NC 28204'
+    },
+    { 
+      summary: 'Grocery Shopping', 
+      start: '5:00 PM', 
+      end: '5:45 PM',
+      location: 'Harris Teeter, 1704 Abbey Pl, Charlotte, NC 28209'
+    },
   ];
 
   useLogStore.getState().addTurn({
