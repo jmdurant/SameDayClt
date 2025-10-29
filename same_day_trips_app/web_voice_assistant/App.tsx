@@ -500,7 +500,20 @@ function AppComponent() {
           <div style={{display: isTrafficVisible ? 'none' : 'block', width: '100%', height: '100%'}}>
           <Map3D
             ref={setMap3d}
-            {...INITIAL_VIEW_PROPS}
+            {...(userLocation 
+              ? {
+                  center: {
+                    lat: userLocation.lat,
+                    lng: userLocation.lng,
+                    altitude: 12000,
+                  },
+                  range: 15000,
+                  tilt: 10,
+                  heading: 0,
+                  roll: 0,
+                }
+              : INITIAL_VIEW_PROPS
+            )}
             onCameraChange={handleCameraChange}
           />
           </div>

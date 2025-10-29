@@ -440,6 +440,10 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> with Widget
   }
 
   Uri _buildWebViewUrl() {
+    print('🔧 DEBUG: Building WebView URL...');
+    print('🔧 DEBUG: _currentLocation = $_currentLocation');
+    print('🔧 DEBUG: lat = ${_currentLocation?.latitude}, lng = ${_currentLocation?.longitude}');
+    
     // Build URL with trip context and location
     final params = <String, String>{
       // Cache busting parameter to force reload of new version
@@ -466,8 +470,11 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> with Widget
     };
 
     if (_currentLocation != null) {
+      print('✅ DEBUG: Adding location to URL params');
       params['lat'] = _currentLocation!.latitude.toString();
       params['lng'] = _currentLocation!.longitude.toString();
+    } else {
+      print('❌ DEBUG: _currentLocation is NULL - location will NOT be in URL!');
     }
 
     // Add stops information as JSON
@@ -542,6 +549,22 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> with Widget
 
   @override
   Widget build(BuildContext context) {
+    // Don't build WebView until location is ready
+    if (_isLoading) {
+    return Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 20),
+              Text('Initializing location and calendar...'),
+            ],
+          ),
+        ),
+      );
+    }
+    
     final url = _buildWebViewUrl();
     
     return Scaffold(
