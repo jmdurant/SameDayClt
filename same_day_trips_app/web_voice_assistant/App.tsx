@@ -83,6 +83,7 @@ function AppComponent() {
     // Get location from URL
     const lat = params.get('lat');
     const lng = params.get('lng');
+    const address = params.get('address');
     if (lat && lng) {
       setUserLocation({ lat: parseFloat(lat), lng: parseFloat(lng) });
     }
@@ -117,7 +118,12 @@ function AppComponent() {
           getMinutes: new Date().getMinutes()
         });
         
-        context += `Current GPS Location: ${lat}, ${lng}\n`;
+        if (address) {
+          context += `Current Location: ${address}\n`;
+          context += `GPS Coordinates: ${lat}, ${lng}\n`;
+        } else {
+          context += `Current GPS Location: ${lat}, ${lng}\n`;
+        }
         context += `Current Time: ${currentTime}\n`;
         context += `Timezone: ${timeZone}\n`;
       }

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:geocoding/geocoding.dart';
 import 'package:device_calendar/device_calendar.dart';
 import 'package:timezone/timezone.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -28,6 +29,7 @@ class VoiceAssistantScreen extends StatefulWidget {
 class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> with WidgetsBindingObserver {
   InAppWebViewController? _controller;
   Position? _currentLocation;
+  String? _currentAddress;
   bool _isLoading = true;
   List<Event> _todaysEvents = [];
 
@@ -335,6 +337,39 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> with Widget
     }
   }
 
+  Future<void> _reverseGeocode(Position position) async {
+    try {
+      List<Placemark> placemarks = await placemarkFromCoordinates(
+        position.latitude,
+        position.longitude,
+      );
+      
+      if (placemarks.isNotEmpty) {
+        final place = placemarks.first;
+        // Build a nice address string
+        String address = '';
+        if (place.street != null && place.street!.isNotEmpty) {
+          address += place.street!;
+        }
+        if (place.subLocality != null && place.subLocality!.isNotEmpty) {
+          if (address.isNotEmpty) address += ', ';
+          address += place.subLocality!;
+        }
+        if (place.locality != null && place.locality!.isNotEmpty) {
+          if (address.isNotEmpty) address += ', ';
+          address += place.locality!;
+        }
+        
+        setState(() {
+          _currentAddress = address;
+        });
+        print('📍 Reverse geocoded address: $address');
+      }
+    } catch (e) {
+      print('⚠️ Reverse geocoding failed: $e');
+    }
+  }
+
   Future<void> _initializeLocation() async {
     try {
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
@@ -389,6 +424,8 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> with Widget
         setState(() {
           _currentLocation = lastKnown;
         });
+        // Reverse geocode in background
+        _reverseGeocode(lastKnown);
         // This allows WebView to load immediately with coarse location
       }
 
@@ -405,7 +442,10 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> with Widget
         _currentLocation = position;
       });
 
-      // Update WebView with accurate location
+      // Reverse geocode accurate location
+      await _reverseGeocode(position);
+      
+      // Update WebView with accurate location and address
       _updateLocationInWebView(position);
 
       // Update location periodically - store subscription for lifecycle management
@@ -420,6 +460,7 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> with Widget
         setState(() {
           _currentLocation = position;
         });
+        _reverseGeocode(position);
         _updateLocationInWebView(position);
         }
       });
@@ -488,6 +529,10 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> with Widget
       print('✅ DEBUG: Adding location to URL params');
       params['lat'] = _currentLocation!.latitude.toString();
       params['lng'] = _currentLocation!.longitude.toString();
+      if (_currentAddress != null) {
+        params['address'] = _currentAddress!;
+        print('✅ DEBUG: Adding address to URL params: $_currentAddress');
+      }
     } else {
       print('❌ DEBUG: _currentLocation is NULL - location will NOT be in URL!');
     }
