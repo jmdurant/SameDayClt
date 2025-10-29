@@ -183,7 +183,7 @@ function AppComponent() {
     }
     
     // Set up window function for Flutter to update location
-    (window as any).updateLocation = (lat: number, lng: number) => {
+    (window as any).updateLocation = (lat: number, lng: number, address?: string) => {
       const location = { lat, lng };
       setUserLocation(location);
       
@@ -203,18 +203,29 @@ function AppComponent() {
           timezone: timeZone,
         });
         
-        const locationBlock = `Current GPS Location: ${lat}, ${lng}\nCurrent Time: ${currentTime}\nTimezone: ${timeZone}`;
+        // Build location block with address if available
+        let locationBlock = '';
+        if (address) {
+          locationBlock = `Current Location: ${address}\nGPS Coordinates: ${lat}, ${lng}\nCurrent Time: ${currentTime}\nTimezone: ${timeZone}`;
+        } else {
+          locationBlock = `Current GPS Location: ${lat}, ${lng}\nCurrent Time: ${currentTime}\nTimezone: ${timeZone}`;
+        }
         
         if (!prev) return `Trip Context:\n${locationBlock}\n`;
         
-        // Replace existing GPS location, time, and timezone lines or add them at the top
+        // Replace existing location, time, and timezone lines or add them at the top
         const lines = prev.split('\n');
-        const hasGPS = lines.some(line => line.startsWith('Current GPS Location:'));
+        const hasLocation = lines.some(line => 
+          line.startsWith('Current GPS Location:') || 
+          line.startsWith('Current Location:')
+        );
         
-        if (hasGPS) {
+        if (hasLocation) {
           // Remove old location, time, and timezone lines and add new block
           const filteredLines = lines.filter(line => 
             !line.startsWith('Current GPS Location:') && 
+            !line.startsWith('Current Location:') &&
+            !line.startsWith('GPS Coordinates:') &&
             !line.startsWith('Current Time:') &&
             !line.startsWith('Timezone:')
           );
@@ -232,7 +243,7 @@ function AppComponent() {
         heading: 0,
         roll: 0,
       });
-      console.log('📍 Location updated from Flutter, flying map to:', lat, lng);
+      console.log('📍 Location updated from Flutter, flying map to:', lat, lng, address || '(no address)');
     };
 
     // Set up window function for tools to switch to 2D map mode (for directions)

@@ -30,7 +30,6 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> with Widget
   InAppWebViewController? _controller;
   Position? _currentLocation;
   String? _currentAddress;
-  bool _isLoading = true;
   List<Event> _todaysEvents = [];
 
   Timer? _proactiveCheckTimer;
@@ -47,7 +46,8 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> with Widget
       DeviceOrientation.landscapeLeft,
       DeviceOrientation.landscapeRight,
     ]);
-    // Initialize location and calendar FIRST, then WebView
+    // Initialize location and calendar in background
+    // WebView will show immediately with last known location
     _initializeLocationAndCalendar();
     _startProactiveChecks();
   }
@@ -66,19 +66,26 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> with Widget
   }
   
   Future<void> _initializeLocationAndCalendar() async {
-    // Initialize location and calendar first
+    // Get last known location first (fast)
+    try {
+      final lastKnown = await Geolocator.getLastKnownPosition();
+      if (lastKnown != null && mounted) {
+        setState(() {
+          _currentLocation = lastKnown;
+        });
+        print('📍 Using last known location: ${lastKnown.latitude}, ${lastKnown.longitude}');
+        _reverseGeocode(lastKnown);
+      }
+    } catch (e) {
+      print('⚠️ Could not get last known position: $e');
+    }
+    
+    // Then initialize accurate location and calendar in background
     await _initializeLocation();
     await _initializeCalendar();
     
-    print('📍 Location: ${_currentLocation?.latitude}, ${_currentLocation?.longitude}');
+    print('📍 Accurate location: ${_currentLocation?.latitude}, ${_currentLocation?.longitude}');
     print('📅 Calendar events: ${_todaysEvents.length}');
-    
-    // NOW set loading to false so WebView can build with location data
-    if (mounted) {
-      setState(() {
-        _isLoading = false;
-      });
-    }
   }
 
   @override
@@ -585,11 +592,13 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> with Widget
 
   void _updateLocationInWebView(Position position) {
     // Send location update to web app via JavaScript
+    final addressParam = _currentAddress != null ? ', "$_currentAddress"' : '';
     _controller?.evaluateJavascript(source: '''
       if (window.updateLocation) {
-        window.updateLocation(${position.latitude}, ${position.longitude});
+        window.updateLocation(${position.latitude}, ${position.longitude}$addressParam);
       }
     ''');
+    print('📍 Sent location update to WebView: ${position.latitude}, ${position.longitude}${addressParam.isNotEmpty ? " ($addressParam)" : ""}');
   }
 
   void _updateCalendarInWebView() {
@@ -620,22 +629,8 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> with Widget
 
   @override
   Widget build(BuildContext context) {
-    // Don't build WebView until location is ready
-    if (_isLoading) {
-    return Scaffold(
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              CircularProgressIndicator(),
-              SizedBox(height: 20),
-              Text('Initializing location and calendar...'),
-            ],
-          ),
-        ),
-      );
-    }
-    
+    // Build WebView immediately with last known location
+    // Will update when accurate location arrives
     final url = _buildWebViewUrl();
     
     return Scaffold(
@@ -787,10 +782,6 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> with Widget
               print('❌ WebView error: ${error.description}');
             },
           ),
-          if (_isLoading)
-            const Center(
-              child: CircularProgressIndicator(),
-            ),
         ],
       ),
     );

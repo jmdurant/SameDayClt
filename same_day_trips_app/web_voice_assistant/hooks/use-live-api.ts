@@ -125,8 +125,14 @@ export function useLiveApi({
    };
 
    const onSetupComplete = () => {
-     // Send the initial message once the connection is confirmed open and setup is complete.
-     client.sendRealtimeText('hello');
+     // Send the trip context as the initial message (if available)
+     // Otherwise send a simple greeting
+     if (tripContext) {
+       console.log('📤 Sending trip context to Gemini:', tripContext);
+       client.sendRealtimeText(tripContext);
+     } else {
+       client.sendRealtimeText('hello');
+     }
    };
 
    const onClose = (event: CloseEvent) => {
@@ -293,7 +299,7 @@ export function useLiveApi({
      client.off('toolcall', onToolCall);
      client.off('generationcomplete', onGenerationComplete);
    };
- }, [client, apiKey, map, placesLib, elevationLib, geocoder, padding, userLocation, setHeldGroundedResponse, setHeldGroundingChunks]);
+ }, [client, apiKey, map, placesLib, elevationLib, geocoder, padding, userLocation, tripContext, setHeldGroundedResponse, setHeldGroundingChunks]);
 
 
  const connect = useCallback(async () => {
@@ -305,17 +311,8 @@ export function useLiveApi({
   client.disconnect();
   await client.connect(config);
   
-  // Send trip context as initial message if available
-  if (tripContext) {
-    setTimeout(() => {
-      useLogStore.getState().addTurn({
-        role: 'system',
-        text: `Context from Flutter app:\n${tripContext}`,
-        isFinal: true,
-      });
-    }, 500);
-  }
-}, [client, config, tripContext]);
+  // Trip context is now sent in onSetupComplete, not here
+}, [client, config]);
 
 
  const disconnect = useCallback(async () => {

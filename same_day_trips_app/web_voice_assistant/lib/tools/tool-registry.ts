@@ -129,7 +129,7 @@ async function fetchPlaceDetailsFromChunks(
       if (place.regularOpeningHours?.weekdayDescriptions) {
         openingHoursText = place.regularOpeningHours.weekdayDescriptions.join(', ');
       }
-      
+
       return {
         position: {
           lat: place.location.lat(),
