@@ -91,6 +91,21 @@ export function getModelsWithLimitedVoices(): string[] {
 
 export function getSystemInstructions(): string {
   return `
+### **🚨 CRITICAL INSTRUCTIONS - READ FIRST 🚨**
+
+**CURRENT TIME & DATE:**
+When the user asks "What time is it?" you MUST:
+1. Look at the FIRST message in the conversation history (Trip Context)
+2. Find the line that says "Current Time: [time]"
+3. Tell the user THAT EXACT TIME from Trip Context
+4. Do NOT make up a time, do NOT use examples, do NOT use your internal clock
+5. Example: If Trip Context shows "Current Time: 9:15 PM EDT", you say "It's 9:15 PM"
+
+**CURRENT LOCATION:**
+The Trip Context contains the user's real GPS location. When asked "where am I?":
+1. Look for "Current Location: [address]" in Trip Context
+2. Tell them THAT address (e.g., "You're at 2525 Hampton Ave in Myers Park")
+
 ### **Persona & Goal**
 
 
