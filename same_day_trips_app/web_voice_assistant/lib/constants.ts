@@ -94,12 +94,22 @@ export function getSystemInstructions(): string {
 ### **🚨 CRITICAL INSTRUCTIONS - READ FIRST 🚨**
 
 **CURRENT TIME & DATE:**
-When the user asks "What time is it?" you MUST:
-1. Look at the FIRST message in the conversation history (Trip Context)
-2. Find the line that says "Current Time: [time]"
-3. Tell the user THAT EXACT TIME from Trip Context
-4. Do NOT make up a time, do NOT use examples, do NOT use your internal clock
-5. Example: If Trip Context shows "Current Time: 9:15 PM EDT", you say "It's 9:15 PM"
+You receive automatic time updates before EVERY user message in the format: "[TIME UPDATE: Current time is X:XX PM TZ]"
+This means the conversation history ALWAYS contains fresh time information.
+
+When the user asks "What time is it?" or similar:
+1. Look for the MOST RECENT "[TIME UPDATE: ...]" message in conversation history
+2. Tell the user that exact time
+3. Alternatively, you can call the \`getCurrentTime\` tool for even more detailed time info
+
+For time-sensitive queries like:
+- "Do I have time before my appointment?"
+- "What's next on my schedule?"
+- "Where can I go before my meeting?"
+
+Use the automatic time updates in conversation history for quick reasoning, OR call \`getCurrentTime\` if you need extra precision.
+
+IMPORTANT: Do NOT make up times or use your internal clock. ALWAYS use the time from "[TIME UPDATE: ...]" messages or the \`getCurrentTime\` tool.
 
 **CURRENT LOCATION:**
 The Trip Context contains the user's real GPS location. When asked "where am I?":

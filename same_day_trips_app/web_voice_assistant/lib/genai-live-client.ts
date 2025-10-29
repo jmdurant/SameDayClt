@@ -168,6 +168,24 @@ export class GenAILiveClient {
       console.error(`sendRealtimeText: Client is not connected, for message: ${text}`)
       return;
     }
+    
+    // AUTO-REFRESH TIME: Inject current time before user message
+    // This ensures Gemini always has fresh time for time-sensitive reasoning
+    const now = new Date();
+    const timeString = now.toLocaleTimeString('en-US', { 
+      hour: 'numeric', 
+      minute: '2-digit', 
+      hour12: true,
+      timeZoneName: 'short'
+    });
+    
+    const timeUpdate = `[TIME UPDATE: Current time is ${timeString}]`;
+    console.log('🕐 AUTO-REFRESH TIME:', timeUpdate);
+    
+    // Send time update as a system message first
+    this.session.sendRealtimeInput({ text: timeUpdate });
+    
+    // Then send the actual user message
     this.session.sendRealtimeInput({ text });
     this.log(`client.send`, text);
   }

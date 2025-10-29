@@ -791,6 +791,31 @@ ${JSON.stringify(mockEvents, null, 2)}
 };
 
 /**
+ * Tool implementation for getting the current time in the user's local timezone.
+ */
+const getCurrentTime: ToolImplementation = async (args, context) => {
+  const now = new Date();
+  const timeString = now.toLocaleTimeString('en-US', { 
+    hour: 'numeric', 
+    minute: '2-digit', 
+    second: '2-digit',
+    hour12: true,
+    timeZoneName: 'short'
+  });
+  
+  const dateString = now.toLocaleDateString('en-US', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  });
+  
+  console.log('🕐 getCurrentTime called:', timeString);
+  
+  return `Current time: ${timeString}\nDate: ${dateString}`;
+};
+
+/**
  * Tool implementation for getting real-time travel time from Google Maps Directions API.
  */
 const getTravelTime: ToolImplementation = async (args, context) => {
@@ -1179,6 +1204,7 @@ export const toolRegistry: Record<string, ToolImplementation> = {
   makePhoneCall,
   addCalendarEvent,
   getTodaysCalendarEvents,
+  getCurrentTime,
   getTravelTime,
   getWeatherForecast,
   trackFlight,

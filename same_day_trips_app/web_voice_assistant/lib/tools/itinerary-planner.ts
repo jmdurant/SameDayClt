@@ -273,6 +273,17 @@ export const itineraryPlannerTools: FunctionCall[] = [
     scheduling: FunctionResponseScheduling.INTERRUPT,
   },
   {
+    name: 'getCurrentTime',
+    description: 'Gets the CURRENT time and date in the user\'s local timezone. Use this tool when you need to know the EXACT current time for time-sensitive queries like: checking if there is time before an appointment, calculating how much time until an event, determining what events are coming up next, or when the user explicitly asks "what time is it?". This always returns the most up-to-date time.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {},
+      required: [],
+    },
+    isEnabled: true,
+    scheduling: FunctionResponseScheduling.INTERRUPT,
+  },
+  {
     name: 'trackFlight',
     description: 'Gets real-time flight status including gate assignments, departure/arrival times, delays, and cancellations using FlightAware data. ONLY use this when the user explicitly provides a flight number or asks about a specific flight. Do NOT use this proactively or if no flight information is available.',
     parameters: {
