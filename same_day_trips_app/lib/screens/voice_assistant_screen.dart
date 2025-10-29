@@ -348,22 +348,33 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> with Widget
         final place = placemarks.first;
         // Build a nice address string
         String address = '';
-        if (place.street != null && place.street!.isNotEmpty) {
-          address += place.street!;
-        }
-        if (place.subLocality != null && place.subLocality!.isNotEmpty) {
-          if (address.isNotEmpty) address += ', ';
-          address += place.subLocality!;
-        }
-        if (place.locality != null && place.locality!.isNotEmpty) {
-          if (address.isNotEmpty) address += ', ';
-          address += place.locality!;
+        
+        // Safely check each field
+        final street = place.street;
+        if (street != null && street.isNotEmpty) {
+          address += street;
         }
         
-        setState(() {
-          _currentAddress = address;
-        });
-        print('📍 Reverse geocoded address: $address');
+        final subLocality = place.subLocality;
+        if (subLocality != null && subLocality.isNotEmpty) {
+          if (address.isNotEmpty) address += ', ';
+          address += subLocality;
+        }
+        
+        final locality = place.locality;
+        if (locality != null && locality.isNotEmpty) {
+          if (address.isNotEmpty) address += ', ';
+          address += locality;
+        }
+        
+        if (address.isNotEmpty) {
+          setState(() {
+            _currentAddress = address;
+          });
+          print('📍 Reverse geocoded address: $address');
+        } else {
+          print('⚠️ Reverse geocoding returned no address components');
+        }
       }
     } catch (e) {
       print('⚠️ Reverse geocoding failed: $e');
