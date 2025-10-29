@@ -382,16 +382,31 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> with Widget
         return;
       }
 
+      // FAST: Try to get last known position first (instant, coarse location)
+      Position? lastKnown = await Geolocator.getLastKnownPosition();
+      if (lastKnown != null) {
+        print('📍 Got last known location (coarse): ${lastKnown.latitude}, ${lastKnown.longitude}');
+        setState(() {
+          _currentLocation = lastKnown;
+        });
+        // This allows WebView to load immediately with coarse location
+      }
+
+      // ACCURATE: Get current high-accuracy position (may take 1-3 seconds)
+      // This happens in background after WebView loads
       Position position = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(
           accuracy: LocationAccuracy.high,
         ),
       );
 
-      print('📍 Got location: ${position.latitude}, ${position.longitude}');
+      print('📍 Got accurate GPS location: ${position.latitude}, ${position.longitude}');
       setState(() {
         _currentLocation = position;
       });
+
+      // Update WebView with accurate location
+      _updateLocationInWebView(position);
 
       // Update location periodically - store subscription for lifecycle management
       _locationSubscription = Geolocator.getPositionStream(

@@ -220,13 +220,13 @@ function AppComponent() {
       
       // Also fly the camera to the new location
       setCameraTarget({
-        center: { ...location, altitude: 1000 },
-        range: 5000,
-        tilt: 45,
+        center: { ...location, altitude: 12000 },
+        range: 15000,
+        tilt: 10,
         heading: 0,
         roll: 0,
       });
-      console.log('📍 Location updated from Flutter:', lat, lng);
+      console.log('📍 Location updated from Flutter, flying map to:', lat, lng);
     };
 
     // Set up window function for tools to switch to 2D map mode (for directions)
