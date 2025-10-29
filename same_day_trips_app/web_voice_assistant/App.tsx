@@ -100,7 +100,16 @@ function AppComponent() {
       
       // Include GPS location at the top for immediate awareness
       if (lat && lng) {
+        const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        const currentTime = new Date().toLocaleTimeString('en-US', { 
+          hour: 'numeric', 
+          minute: '2-digit', 
+          hour12: true,
+          timeZoneName: 'short'
+        });
         context += `Current GPS Location: ${lat}, ${lng}\n`;
+        context += `Current Time: ${currentTime}\n`;
+        context += `Timezone: ${timeZone}\n`;
       }
       
       if (city) context += `City: ${city}\n`;
@@ -162,22 +171,34 @@ function AppComponent() {
       const location = { lat, lng };
       setUserLocation(location);
       
-      // Update trip context with new location
+      // Update trip context with new location and current time
       setTripContext(prev => {
-        if (!prev) return `Trip Context:\nCurrent GPS Location: ${lat}, ${lng}\n`;
+        const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        const currentTime = new Date().toLocaleTimeString('en-US', { 
+          hour: 'numeric', 
+          minute: '2-digit', 
+          hour12: true,
+          timeZoneName: 'short'
+        });
         
-        // Replace existing GPS location line or add it at the top
+        const locationBlock = `Current GPS Location: ${lat}, ${lng}\nCurrent Time: ${currentTime}\nTimezone: ${timeZone}`;
+        
+        if (!prev) return `Trip Context:\n${locationBlock}\n`;
+        
+        // Replace existing GPS location, time, and timezone lines or add them at the top
         const lines = prev.split('\n');
         const hasGPS = lines.some(line => line.startsWith('Current GPS Location:'));
         
         if (hasGPS) {
-          return lines.map(line => 
-            line.startsWith('Current GPS Location:') 
-              ? `Current GPS Location: ${lat}, ${lng}` 
-              : line
-          ).join('\n');
+          // Remove old location, time, and timezone lines and add new block
+          const filteredLines = lines.filter(line => 
+            !line.startsWith('Current GPS Location:') && 
+            !line.startsWith('Current Time:') &&
+            !line.startsWith('Timezone:')
+          );
+          return `${filteredLines[0]}\n${locationBlock}\n${filteredLines.slice(1).join('\n')}`;
         } else {
-          return `Trip Context:\nCurrent GPS Location: ${lat}, ${lng}\n${prev.replace('Trip Context:\n', '')}`;
+          return `Trip Context:\n${locationBlock}\n${prev.replace('Trip Context:\n', '')}`;
         }
       });
       

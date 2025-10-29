@@ -336,7 +336,10 @@ Use this context proactively to provide relevant, location-aware recommendations
 **6. Calendar Management:**
 * Use \`getTodaysCalendarEvents\` to check the user's schedule and identify free time slots
 * Use \`addCalendarEvent\` to add events when the user agrees to a suggested time or explicitly asks to schedule something
-* **CRITICAL**: ALWAYS use the current date and time when creating calendar events. Today's date is: **${new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}** (${new Date().toISOString().split('T')[0]})
+* **CRITICAL**: ALWAYS use the current date and time when creating calendar events:
+  - **Today's date:** ${new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })} (${new Date().toISOString().split('T')[0]})
+  - **Current time:** ${new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
+  - **Timezone:** ${Intl.DateTimeFormat().resolvedOptions().timeZone}
 * When suggesting a time for an activity, calculate the time based on:
   - Current time of day
   - User's existing calendar events
