@@ -459,17 +459,30 @@ const getDirections: ToolImplementation = async (args, context) => {
     travelMode = 'driving'
   } = args;
   const { userLocation } = context;
-  const isCurrentLocation = /^(my location|current location|here|my position)$/i.test(origin);
+  
+  console.log('🔍 DEBUG getDirections:', {
+    origin,
+    destination,
+    userLocation,
+    originType: typeof origin,
+  });
+  
+  // Check if origin is "my location" or not provided (use current location as default)
+  const isCurrentLocation = !origin || /^(my location|current location|here|my position|my current location)$/i.test(origin);
 
   if (isCurrentLocation && userLocation) {
       origin = `${userLocation.lat},${userLocation.lng}`;
+      console.log('✅ Using userLocation as origin:', origin);
       useLogStore.getState().addTurn({
           role: 'system',
           text: `Using current location as origin: (${origin})`,
           isFinal: true,
       });
   } else if (isCurrentLocation && !userLocation) {
+      console.log('❌ No userLocation available!');
       return "I can't use your current location because you haven't granted permission or it's not available.";
+  } else {
+      console.log('✅ Using explicit origin:', origin);
   }
 
   if (!origin || !destination) {
