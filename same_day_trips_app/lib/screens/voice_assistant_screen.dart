@@ -71,8 +71,12 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> with Widget
     print('📍 Location: ${_currentLocation?.latitude}, ${_currentLocation?.longitude}');
     print('📅 Calendar events: ${_todaysEvents.length}');
     
-    // NOW initialize WebView with location data available
-    _initializeWebView();
+    // NOW set loading to false so WebView can build with location data
+    if (mounted) {
+      setState(() {
+        _isLoading = false;
+      });
+    }
   }
 
   @override
@@ -424,11 +428,6 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> with Widget
     }
   }
 
-  void _initializeWebView() {
-    // InAppWebView initialization happens in the build method
-    print('🌐 Preparing InAppWebView...');
-  }
-
   void _setupJavaScriptChannels() {
     // Set up navigation channel for voice assistant to call Google Maps
     _controller?.evaluateJavascript(source: '''
@@ -671,11 +670,6 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> with Widget
             },
             onLoadStop: (controller, url) async {
               print('🌐 Page finished loading: $url');
-              if (mounted) {
-                setState(() {
-                  _isLoading = false;
-                });
-              }
               _setupJavaScriptChannels();
             },
                   onConsoleMessage: (controller, consoleMessage) {

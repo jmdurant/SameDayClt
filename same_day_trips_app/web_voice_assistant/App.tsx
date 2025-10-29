@@ -107,6 +107,16 @@ function AppComponent() {
           hour12: true,
           timeZoneName: 'short'
         });
+        
+        console.log('🕐 DEBUG TIME INFO:', {
+          rawDate: new Date(),
+          formattedTime: currentTime,
+          timezone: timeZone,
+          isoString: new Date().toISOString(),
+          getHours: new Date().getHours(),
+          getMinutes: new Date().getMinutes()
+        });
+        
         context += `Current GPS Location: ${lat}, ${lng}\n`;
         context += `Current Time: ${currentTime}\n`;
         context += `Timezone: ${timeZone}\n`;
@@ -179,6 +189,12 @@ function AppComponent() {
           minute: '2-digit', 
           hour12: true,
           timeZoneName: 'short'
+        });
+        
+        console.log('🕐 DEBUG TIME UPDATE:', {
+          rawDate: new Date(),
+          formattedTime: currentTime,
+          timezone: timeZone,
         });
         
         const locationBlock = `Current GPS Location: ${lat}, ${lng}\nCurrent Time: ${currentTime}\nTimezone: ${timeZone}`;
