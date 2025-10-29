@@ -332,14 +332,16 @@ function AppComponent() {
   useEffect(() => {
     // Only get geolocation if not already provided by Flutter app
     if (userLocation) {
-      console.log('📍 Using location from Flutter app');
+      console.log('📍 Using location from Flutter app:', userLocation);
       return;
     }
     
+    console.log('📍 No location from Flutter, trying browser geolocation...');
     navigator.geolocation.getCurrentPosition(
       (position) => {
         const { latitude, longitude } = position.coords;
         const location = { lat: latitude, lng: longitude };
+        console.log('📍 Got browser geolocation:', location);
         setUserLocation(location);
         setCameraTarget({
           center: { ...location, altitude: 1000 },
@@ -354,12 +356,12 @@ function AppComponent() {
         useLogStore.getState().addTurn({
           role: 'system',
           text: 'Could not get your location. Using a default starting point.',
-          isFinal: true,
+          isFatal: true,
         });
       },
       { enableHighAccuracy: true }
     );
-  }, [setCameraTarget]);
+  }, [userLocation, setCameraTarget]);
 
   useEffect(() => {
     if (!mapController || !cameraTarget) return;
