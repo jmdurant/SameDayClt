@@ -303,4 +303,100 @@ export const itineraryPlannerTools: FunctionCall[] = [
     isEnabled: true,
     scheduling: FunctionResponseScheduling.INTERRUPT,
   },
+  {
+    name: 'searchFlightsDuffel',
+    description: 'Searches for round-trip flights between two airports using the Duffel API, which includes comprehensive airline coverage including Delta, American Airlines, and other major carriers. Returns detailed flight options with times, prices, carriers, and booking information. Use this when the user wants to search for flights between specific airports or needs alternative flight options beyond their booked flights.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        origin: {
+          type: 'STRING',
+          description: 'The 3-letter IATA airport code for the origin (e.g., "CLT", "ATL", "JFK")'
+        },
+        destination: {
+          type: 'STRING',
+          description: 'The 3-letter IATA airport code for the destination (e.g., "LAX", "ORD", "MIA")'
+        },
+        date: {
+          type: 'STRING',
+          description: 'Travel date in YYYY-MM-DD format. If not provided, defaults to tomorrow.'
+        },
+        departByHour: {
+          type: 'NUMBER',
+          description: 'Latest departure hour in 24-hour format (0-23). Default is 9 (9 AM).'
+        },
+        returnAfterHour: {
+          type: 'NUMBER',
+          description: 'Earliest return hour in 24-hour format (0-23). Default is 15 (3 PM).'
+        },
+        returnByHour: {
+          type: 'NUMBER',
+          description: 'Latest return hour in 24-hour format (0-23). Default is 19 (7 PM).'
+        },
+        maxDurationMinutes: {
+          type: 'NUMBER',
+          description: 'Maximum flight duration in minutes. Default is 240 (4 hours).'
+        }
+      },
+      required: ['origin', 'destination'],
+    },
+    isEnabled: true,
+    scheduling: FunctionResponseScheduling.INTERRUPT,
+  },
+  {
+    name: 'requestUber',
+    description: 'Opens the Uber app to request or schedule a ride to a destination. Use this when the user specifically asks for Uber, or when they ask for a ride without specifying a service. The pickup location will automatically be set to the user\'s current location.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        destination: {
+          type: 'STRING',
+          description: 'The destination address or place name (e.g., "Charlotte Douglas Airport", "123 Main St, Charlotte, NC", "Bank of America Stadium")'
+        },
+        scheduledTime: {
+          type: 'STRING',
+          description: 'Optional scheduled pickup time in ISO 8601 format (e.g., "2025-10-30T06:00:00"). If not provided, requests an immediate ride.'
+        },
+        productType: {
+          type: 'STRING',
+          description: 'Optional ride type preference.',
+          enum: ['uberX', 'uberXL', 'uberBlack', 'uberComfort'],
+          default: 'uberX'
+        },
+        nickname: {
+          type: 'STRING',
+          description: 'Optional nickname for the ride (e.g., "Airport Transfer", "Morning Meeting")'
+        }
+      },
+      required: ['destination'],
+    },
+    isEnabled: true,
+    scheduling: FunctionResponseScheduling.INTERRUPT,
+  },
+  {
+    name: 'requestLyft',
+    description: 'Opens the Lyft app to request or schedule a ride to a destination. Use this when the user specifically asks for Lyft. The pickup location will automatically be set to the user\'s current location.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        destination: {
+          type: 'STRING',
+          description: 'The destination address or place name (e.g., "Charlotte Douglas Airport", "123 Main St, Charlotte, NC", "Bank of America Stadium")'
+        },
+        scheduledTime: {
+          type: 'STRING',
+          description: 'Optional scheduled pickup time in ISO 8601 format (e.g., "2025-10-30T06:00:00"). If not provided, requests an immediate ride.'
+        },
+        rideType: {
+          type: 'STRING',
+          description: 'Optional ride type preference.',
+          enum: ['lyft', 'lyft_plus', 'lyft_lux', 'lyft_luxsuv'],
+          default: 'lyft'
+        }
+      },
+      required: ['destination'],
+    },
+    isEnabled: true,
+    scheduling: FunctionResponseScheduling.INTERRUPT,
+  },
 ];

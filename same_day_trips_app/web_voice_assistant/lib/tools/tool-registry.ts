@@ -1192,6 +1192,335 @@ const trackFlight: ToolImplementation = async (args, context) => {
 };
 
 /**
+ * Tool implementation for requesting an Uber ride.
+ * Opens the Uber app with pre-filled pickup and destination.
+ */
+const requestUber: ToolImplementation = async (args, context) => {
+  const { destination, scheduledTime, productType = 'uberX', nickname } = args;
+
+  console.log('🚕 Requesting Uber:', { destination, scheduledTime, productType, nickname });
+
+  if (!destination) {
+    return 'I need a destination address to request an Uber.';
+  }
+
+  // Get current location from context (already available in Trip Context)
+  const currentLat = context?.lat;
+  const currentLng = context?.lng;
+
+  if (!currentLat || !currentLng) {
+    return 'I need your current location to request an Uber. Please enable location services.';
+  }
+
+  try {
+    // Build Uber deep link
+    // Format: uber://?action=setPickup&pickup[latitude]=LAT&pickup[longitude]=LNG&dropoff[formatted_address]=ADDRESS
+    const params = new URLSearchParams();
+    params.append('action', 'setPickup');
+    params.append('pickup[latitude]', currentLat.toString());
+    params.append('pickup[longitude]', currentLng.toString());
+    params.append('dropoff[formatted_address]', destination as string);
+
+    // Add product type (uberX, uberXL, etc.)
+    if (productType) {
+      // Product IDs vary by city, but we can use client_id to suggest type
+      params.append('product_id', productType as string);
+    }
+
+    // Add scheduled time if provided
+    if (scheduledTime) {
+      const scheduleTime = new Date(scheduledTime as string);
+      // Uber uses Unix timestamp (seconds since epoch)
+      const unixTimestamp = Math.floor(scheduleTime.getTime() / 1000);
+      params.append('pickup_time', unixTimestamp.toString());
+    }
+
+    // Add nickname if provided
+    if (nickname) {
+      params.append('pickup_nickname', nickname as string);
+    }
+
+    const uberDeepLink = `uber://?${params.toString()}`;
+    const uberWebFallback = `https://m.uber.com/ul/?${params.toString()}`;
+
+    // Try to open Uber app (works in Flutter and mobile browsers)
+    console.log('🚕 Opening Uber:', uberDeepLink);
+
+    // Attempt to open the deep link
+    const openAttempt = window.open(uberDeepLink, '_blank');
+
+    // Fallback to web if deep link doesn't work
+    setTimeout(() => {
+      if (!openAttempt || openAttempt.closed) {
+        console.log('🌐 Falling back to Uber web:', uberWebFallback);
+        window.open(uberWebFallback, '_blank');
+      }
+    }, 500);
+
+    // Format response message
+    let responseMsg = `Opening Uber to request a ride to ${destination}`;
+
+    if (scheduledTime) {
+      const scheduleDate = new Date(scheduledTime as string);
+      const timeStr = scheduleDate.toLocaleTimeString('en-US', {
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true
+      });
+      const dateStr = scheduleDate.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric'
+      });
+      responseMsg += ` scheduled for ${timeStr} on ${dateStr}`;
+    } else {
+      responseMsg += ' now';
+    }
+
+    responseMsg += '. The Uber app will open in a moment.';
+
+    useLogStore.getState().addTurn({
+      role: 'system',
+      text: `Tool \`requestUber\` called for destination: ${destination}`,
+      isFinal: true,
+    });
+
+    return responseMsg;
+
+  } catch (error) {
+    console.error('❌ Error requesting Uber:', error);
+    return `I encountered an error while trying to request an Uber to ${destination}. Please try opening the Uber app manually.`;
+  }
+};
+
+/**
+ * Tool implementation for requesting a Lyft ride.
+ * Opens the Lyft app with pre-filled pickup and destination.
+ */
+const requestLyft: ToolImplementation = async (args, context) => {
+  const { destination, scheduledTime, rideType = 'lyft' } = args;
+
+  console.log('🚗 Requesting Lyft:', { destination, scheduledTime, rideType });
+
+  if (!destination) {
+    return 'I need a destination address to request a Lyft.';
+  }
+
+  // Get current location from context (already available in Trip Context)
+  const currentLat = context?.lat;
+  const currentLng = context?.lng;
+
+  if (!currentLat || !currentLng) {
+    return 'I need your current location to request a Lyft. Please enable location services.';
+  }
+
+  try {
+    // Build Lyft deep link
+    // Format: lyft://ridetype?id=lyft&pickup[latitude]=LAT&pickup[longitude]=LNG&destination[latitude]=LAT&destination[longitude]=LNG
+    const params = new URLSearchParams();
+    params.append('id', rideType as string);
+    params.append('pickup[latitude]', currentLat.toString());
+    params.append('pickup[longitude]', currentLng.toString());
+
+    // For destination, we need to geocode the address to lat/lng
+    // For now, we'll use the destination parameter directly (Lyft can handle addresses too)
+    params.append('destination[address]', destination as string);
+
+    // Add partner ID if you have one (optional)
+    // params.append('partner', 'YOUR_PARTNER_ID');
+
+    const lyftDeepLink = `lyft://ridetype?${params.toString()}`;
+    const lyftWebFallback = `https://lyft.com/ride?${params.toString()}`;
+
+    // Try to open Lyft app (works in Flutter and mobile browsers)
+    console.log('🚗 Opening Lyft:', lyftDeepLink);
+
+    // Attempt to open the deep link
+    const openAttempt = window.open(lyftDeepLink, '_blank');
+
+    // Fallback to web if deep link doesn't work
+    setTimeout(() => {
+      if (!openAttempt || openAttempt.closed) {
+        console.log('🌐 Falling back to Lyft web:', lyftWebFallback);
+        window.open(lyftWebFallback, '_blank');
+      }
+    }, 500);
+
+    // Format response message
+    let responseMsg = `Opening Lyft to request a ride to ${destination}`;
+
+    if (scheduledTime) {
+      const scheduleDate = new Date(scheduledTime as string);
+      const timeStr = scheduleDate.toLocaleTimeString('en-US', {
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true
+      });
+      const dateStr = scheduleDate.toLocaleTimeString('en-US', {
+        month: 'short',
+        day: 'numeric'
+      });
+      responseMsg += ` scheduled for ${timeStr} on ${dateStr}`;
+    } else {
+      responseMsg += ' now';
+    }
+
+    // Add ride type info
+    const rideTypeNames: Record<string, string> = {
+      'lyft': 'Lyft',
+      'lyft_plus': 'Lyft Plus',
+      'lyft_lux': 'Lyft Lux',
+      'lyft_luxsuv': 'Lyft Lux SUV'
+    };
+    const rideTypeName = rideTypeNames[rideType as string] || rideType;
+    responseMsg += ` (${rideTypeName})`;
+
+    responseMsg += '. The Lyft app will open in a moment.';
+
+    useLogStore.getState().addTurn({
+      role: 'system',
+      text: `Tool \`requestLyft\` called for destination: ${destination}`,
+      isFinal: true,
+    });
+
+    return responseMsg;
+
+  } catch (error) {
+    console.error('❌ Error requesting Lyft:', error);
+    return `I encountered an error while trying to request a Lyft to ${destination}. Please try opening the Lyft app manually.`;
+  }
+};
+
+/**
+ * Helper function to get airline name from IATA code
+ */
+function getAirlineName(code: string): string {
+  const airlines: Record<string, string> = {
+    'AA': 'American Airlines',
+    'DL': 'Delta',
+    'UA': 'United',
+    'WN': 'Southwest',
+    'B6': 'JetBlue',
+    'AS': 'Alaska Airlines',
+    'NK': 'Spirit',
+    'F9': 'Frontier',
+    'G4': 'Allegiant',
+  };
+  return airlines[code] || code;
+}
+
+/**
+ * Tool implementation for searching flights via Duffel API.
+ * Uses Firebase Cloud Function proxy to securely access Duffel API.
+ */
+const searchFlightsDuffel: ToolImplementation = async (args, context) => {
+  const { origin, destination, date, departByHour = 9, returnAfterHour = 15, returnByHour = 19, maxDurationMinutes = 240 } = args;
+
+  if (!origin || !destination) {
+    return 'Origin and destination airport codes are required to search flights.';
+  }
+
+  // Clean up airport codes (remove spaces, convert to uppercase)
+  const cleanOrigin = (origin as string).replace(/\s+/g, '').toUpperCase();
+  const cleanDestination = (destination as string).replace(/\s+/g, '').toUpperCase();
+
+  try {
+    // Use Firebase Cloud Function proxy to call Duffel API
+    const functionUrl = 'https://us-central1-samedaytrips.cloudfunctions.net/duffelProxy';
+
+    const response = await fetch(functionUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        origin: cleanOrigin,
+        destination: cleanDestination,
+        date: date as string || new Date(Date.now() + 86400000).toISOString().split('T')[0], // Tomorrow if not specified
+        departByHour: departByHour as number,
+        returnAfterHour: returnAfterHour as number,
+        returnByHour: returnByHour as number,
+        maxDurationMinutes: maxDurationMinutes as number,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Duffel API error:', response.status, errorText);
+
+      if (response.status === 404) {
+        return `No flights found from ${cleanOrigin} to ${cleanDestination}. Please check the airport codes and try again.`;
+      } else if (response.status === 401) {
+        return `Authentication error with Duffel API. Please check the API configuration.`;
+      } else {
+        return `Error fetching flight data: ${response.status}. Please try again.`;
+      }
+    }
+
+    const data = await response.json();
+
+    if (!data.trips || data.trips.length === 0) {
+      return `No same-day round-trip flights found from ${cleanOrigin} to ${cleanDestination} on ${date || 'tomorrow'}. Try adjusting your time preferences or try a different date.`;
+    }
+
+    // Format the response
+    const trips = data.trips;
+    let responseText = `Found ${trips.length} round-trip flight options from ${cleanOrigin} to ${cleanDestination}:\n\n`;
+
+    // Show top 5 trips
+    const topTrips = trips.slice(0, 5);
+    for (let i = 0; i < topTrips.length; i++) {
+      const trip = topTrips[i];
+      const airlineName = getAirlineName(trip.airlineCode);
+
+      responseText += `${i + 1}. $${trip.totalPrice.toFixed(2)} round-trip (${airlineName})\n`;
+      responseText += `   Outbound: ${trip.outbound.flightNumbers}\n`;
+      responseText += `     Departs: ${new Date(trip.outbound.departTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}\n`;
+      responseText += `     Arrives: ${new Date(trip.outbound.arriveTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}\n`;
+      responseText += `     Duration: ${Math.floor(trip.outbound.durationMinutes / 60)}h ${trip.outbound.durationMinutes % 60}m\n`;
+      responseText += `   Return: ${trip.returnFlight.flightNumbers}\n`;
+      responseText += `     Departs: ${new Date(trip.returnFlight.departTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}\n`;
+      responseText += `     Arrives: ${new Date(trip.returnFlight.arriveTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}\n`;
+      responseText += `     Duration: ${Math.floor(trip.returnFlight.durationMinutes / 60)}h ${trip.returnFlight.durationMinutes % 60}m\n`;
+
+      // Calculate ground time
+      const groundTimeMs = new Date(trip.returnFlight.departTime).getTime() - new Date(trip.outbound.arriveTime).getTime();
+      const groundTimeHours = (groundTimeMs / (1000 * 60 * 60)).toFixed(1);
+      responseText += `   Ground Time: ${groundTimeHours} hours\n`;
+
+      // Add booking links
+      responseText += `   📱 Book:\n`;
+      if (trip.airlineUrl) {
+        responseText += `      • ${airlineName}: ${trip.airlineUrl}\n`;
+      }
+      responseText += `      • Google Flights: ${trip.googleFlightsUrl}\n`;
+      responseText += `      • Kayak: ${trip.kayakUrl}\n\n`;
+    }
+
+    if (trips.length > 5) {
+      responseText += `...and ${trips.length - 5} more options available.`;
+    }
+
+    useLogStore.getState().addTurn({
+      role: 'system',
+      text: `Tool \`searchFlightsDuffel\` called for ${cleanOrigin} → ${cleanDestination}.`,
+      isFinal: true,
+    });
+
+    return responseText;
+
+  } catch (error) {
+    console.error('Error calling Duffel API:', error);
+    const errorMessage = `Sorry, I was unable to search for flights from ${cleanOrigin} to ${cleanDestination} at this time.`;
+    useLogStore.getState().addTurn({
+      role: 'system',
+      text: `${errorMessage} See browser console for details.`,
+      isFinal: true,
+    });
+    return errorMessage;
+  }
+};
+
+/**
  * A registry mapping tool names to their implementation functions.
  * The `onToolCall` handler uses this to dispatch function calls dynamically.
  */
@@ -1208,4 +1537,7 @@ export const toolRegistry: Record<string, ToolImplementation> = {
   getTravelTime,
   getWeatherForecast,
   trackFlight,
+  searchFlightsDuffel,
+  requestUber,
+  requestLyft,
 };
