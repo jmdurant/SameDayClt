@@ -1,6 +1,10 @@
 import * as functions from 'firebase-functions';
 import cors from 'cors';
 import {Request, Response} from 'express';
+import * as dotenv from 'dotenv';
+
+// Load environment variables from .env file
+dotenv.config();
 
 // Initialize CORS with options
 const corsHandler = cors({
@@ -34,8 +38,8 @@ export const flightawareProxy = functions.https.onRequest(
           return;
         }
 
-        // FlightAware API key (stored in Firebase environment config)
-        const FLIGHTAWARE_API_KEY = 'G3wJ4zeoOPTjGNpT5ZFnqbB4CmeGygEi';
+        // FlightAware API key (loaded from environment variables)
+        const FLIGHTAWARE_API_KEY = process.env.FLIGHTAWARE_API_KEY || '';
 
         // Build query parameters
         const params = new URLSearchParams();
@@ -109,9 +113,16 @@ export const duffelProxy = functions.https.onRequest(
           return;
         }
 
-        // Duffel API access token (stored in Firebase environment config)
-        // TODO: Set this via Firebase environment config: firebase functions:config:set duffel.token="YOUR_TOKEN"
-        const DUFFEL_ACCESS_TOKEN = process.env.DUFFEL_ACCESS_TOKEN || 'YOUR_DUFFEL_TOKEN_HERE';
+        // Duffel API access token (loaded from environment variables)
+        const DUFFEL_ACCESS_TOKEN = process.env.DUFFEL_ACCESS_TOKEN || '';
+
+        if (!DUFFEL_ACCESS_TOKEN) {
+          res.status(500).json({
+            error: 'Duffel API token not configured',
+            details: 'Please set DUFFEL_ACCESS_TOKEN in .env file'
+          });
+          return;
+        }
 
         // Format time windows for Duffel (HH:MM format)
         const departFrom = '05:00'; // Start of morning
