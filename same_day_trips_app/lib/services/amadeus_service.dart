@@ -1,11 +1,12 @@
 import 'package:dio/dio.dart';
 import '../models/flight_offer.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 /// Direct Amadeus API service - no Flask server required!
 class AmadeusService {
   static const String baseUrl = 'https://api.amadeus.com';
-  static const String apiKey = 'F0QDmuG1Kc7tXkeGTDzsTAIxgQ7u8jNV';
-  static const String apiSecret = 'CA31MljZl5BLgn79';
+  static String get apiKey => dotenv.env['AMADEUS_CLIENT_ID'] ?? '';
+  static String get apiSecret => dotenv.env['AMADEUS_CLIENT_SECRET'] ?? '';
 
   final Dio _dio = Dio(BaseOptions(
     baseUrl: baseUrl,

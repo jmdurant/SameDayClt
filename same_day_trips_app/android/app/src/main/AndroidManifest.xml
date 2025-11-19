@@ -1,4 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-feature android:name="android.software.car.app.library" android:required="false" />
+    <uses-permission android:name="androidx.car.app.MEDIA_TEMPLATES"/>
     <application
         android:label="same_day_trips_app"
         android:name="${applicationName}"
@@ -40,6 +42,15 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+
+        <meta-data android:name="androidx.car.app.minCarApiLevel" android:value="1" />
+        
+        <service android:name="com.oguzhnatly.flutter_android_auto.AndroidAutoService" android:exported="true">
+            <intent-filter>
+                <action android:name="androidx.car.app.CarAppService" />
+                <category android:name="androidx.car.app.category.MEDIA"/>
+            </intent-filter>
+        </service>
     </application>
     
     <!-- Required: Internet permission -->

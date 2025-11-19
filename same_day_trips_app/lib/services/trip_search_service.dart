@@ -1,10 +1,12 @@
 import '../models/trip.dart';
 import '../models/flight_offer.dart';
 import 'amadeus_service.dart';
+import 'duffel_service.dart';
 
 /// Service for finding same-day trips - Pure Dart, no Flask required!
 class TripSearchService {
   final AmadeusService _amadeus = AmadeusService();
+  final DuffelService _duffel = DuffelService();
 
   /// Search for all viable same-day trips
   /// This is the main entry point - replaces the Flask /api/search endpoint
@@ -71,82 +73,48 @@ class TripSearchService {
     try {
       print('  🔍 ${destination.code} - ${destination.city}');
 
-      // Search outbound flights
-      final outboundOffers = await _amadeus.searchFlights(
+      // Use Duffel for ROUND-TRIP search (more efficient + better airline coverage)
+      final roundTripResult = await _duffel.searchRoundTrip(
         origin: criteria.origin,
         destination: destination.code,
         date: criteria.date,
+        departByHour: criteria.departBy,
+        returnAfterHour: criteria.returnAfter,
+        returnByHour: criteria.returnBy,
+        maxDurationMinutes: criteria.maxDuration,
       );
 
-      print('    📥 Got ${outboundOffers.length} outbound flights from API');
-
-      final outboundFlights = _amadeus.filterOutboundFlights(
-        outboundOffers,
-        criteria.departBy,
-        criteria.maxDuration,
-      );
-
-      print('    ✅ ${outboundFlights.length} outbound flights passed filter');
-
-      if (outboundFlights.isEmpty) {
-        if (outboundOffers.isNotEmpty) {
-          // Debug: show why flights were filtered out
-          print('    ⚠️ ${outboundOffers.length} outbound flights found but filtered out (depart by ${criteria.departBy}:00, max ${criteria.maxDuration}min)');
-          if (outboundOffers.length <= 3) {
-            for (final offer in outboundOffers) {
-              print('       - Departs ${offer.departHourLocal}:xx, duration ${offer.durationMinutes}min');
-            }
-          }
-        }
+      if (roundTripResult == null || roundTripResult.trips.isEmpty) {
         return [];
       }
 
-      // Small delay between API calls to respect rate limits
-      await Future.delayed(Duration(milliseconds: 200));
+      print('    ✅ Duffel found ${roundTripResult.trips.length} viable trips to ${destination.code}');
 
-      // Search return flights
-      final returnOffers = await _amadeus.searchFlights(
-        origin: destination.code,
-        destination: criteria.origin,
-        date: criteria.date,
-      );
+      // Convert Duffel RoundTripOffers to our Trip model
+      final trips = roundTripResult.trips.map((offer) {
+        // Calculate ground time
+        final groundTimeHours = _amadeus.calculateGroundTime(
+          offer.outbound.arriveTime,
+          offer.returnFlight.departTime,
+        );
 
-      final returnFlights = _amadeus.filterReturnFlights(
-        returnOffers,
-        criteria.returnAfter,
-        criteria.returnBy,
-        criteria.maxDuration,
-      );
-
-      if (returnFlights.isEmpty) {
-        return [];
-      }
-
-      // Match all valid pairings
-      final trips = <Trip>[];
-      for (final outbound in outboundFlights) {
-        for (final returnFlight in returnFlights) {
-          final groundTimeHours = _amadeus.calculateGroundTime(
-            outbound.arriveTime,
-            returnFlight.departTime,
-          );
-
-          // Check if ground time meets minimum threshold
-          if (groundTimeHours >= criteria.minGroundTime) {
-            trips.add(_createTrip(
-              origin: criteria.origin,
-              destination: destination,
-              date: criteria.date,
-              outbound: outbound,
-              returnFlight: returnFlight,
-              groundTimeHours: groundTimeHours,
-            ));
-          }
+        // Double check ground time (Duffel search doesn't filter by min ground time)
+        if (groundTimeHours < criteria.minGroundTime) {
+          return null;
         }
-      }
+
+        return _createTrip(
+          origin: criteria.origin,
+          destination: destination,
+          date: criteria.date,
+          outbound: offer.outbound,
+          returnFlight: offer.returnFlight,
+          groundTimeHours: groundTimeHours,
+        );
+      }).whereType<Trip>().toList();
 
       if (trips.isNotEmpty) {
-        print('    ✅ ${trips.length} viable trips to ${destination.code}');
+        print('    ✨ ${trips.length} trips passed ground time check (>=${criteria.minGroundTime}h)');
       }
 
       return trips;

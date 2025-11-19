@@ -2,10 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'screens/search_screen.dart';
-import 'screens/android_auto_home_screen.dart';
+import 'car/car_controller.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // Initialize Android Auto / CarPlay controller
+  CarController().initialize();
   
   // Request critical permissions upfront for better UX
   // WebRTC permissions (required for voice assistant)
@@ -81,7 +84,7 @@ class _SameDayTripsAppState extends State<SameDayTripsApp> {
         primarySwatch: Colors.blue,
         useMaterial3: true,
       ),
-      home: _isAndroidAuto ? const AndroidAutoHomeScreen() : const SearchScreen(),
+      home: const SearchScreen(),
       debugShowCheckedModeBanner: false,
     );
   }

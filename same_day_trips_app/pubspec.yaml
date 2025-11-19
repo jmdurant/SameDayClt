@@ -12,6 +12,7 @@ dependencies:
 
   # HTTP requests
   dio: ^5.4.0
+  flutter_dotenv: ^5.1.0
 
   # AI - Direct REST API calls to Gemini with Maps grounding (no SDK needed!)
 
@@ -38,6 +39,9 @@ dependencies:
   # Voice (keeping as fallback)
   speech_to_text: ^7.3.0
   flutter_tts: ^4.2.3
+  
+  # Android Auto / CarPlay
+  flutter_carplay: ^1.2.1
   
   # Audio recording for Gemini Live
   record: ^6.1.2
