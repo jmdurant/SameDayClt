@@ -399,4 +399,36 @@ export const itineraryPlannerTools: FunctionCall[] = [
     isEnabled: true,
     scheduling: FunctionResponseScheduling.INTERRUPT,
   },
+  {
+    name: 'addStop',
+    description: 'Adds a new stop to the trip itinerary. Use this when the user explicitly asks to add a stop, visit a place, or include a location in their trip plan.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        name: {
+          type: 'STRING',
+          description: 'The name of the place to add (e.g., "Eiffel Tower", "Starbucks").'
+        },
+        location: {
+          type: 'STRING',
+          description: 'The address or location of the place (e.g., "Champ de Mars, 5 Av. Anatole France, 75007 Paris").'
+        },
+        duration: {
+          type: 'STRING',
+          description: 'The estimated duration of the stop (e.g., "1 hour", "30 minutes").'
+        },
+        lat: {
+          type: 'NUMBER',
+          description: 'The latitude of the location (if known).'
+        },
+        lng: {
+          type: 'NUMBER',
+          description: 'The longitude of the location (if known).'
+        }
+      },
+      required: ['name', 'location'],
+    },
+    isEnabled: true,
+    scheduling: FunctionResponseScheduling.INTERRUPT,
+  },
 ];

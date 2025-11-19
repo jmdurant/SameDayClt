@@ -740,6 +740,65 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> with Widget
                   }
                 },
               );
+
+              // Add JavaScript handler for adding stops
+              controller.addJavaScriptHandler(
+                handlerName: 'FlutterAddStop',
+                callback: (args) async {
+                  try {
+                    final data = args[0];
+                    final String name = data['name'] ?? '';
+                    final String location = data['location'] ?? '';
+                    final String durationStr = data['duration'] ?? '';
+                    final double? lat = data['lat'];
+                    final double? lng = data['lng'];
+
+                    if (name.isEmpty || location.isEmpty) {
+                      print('⚠️ Add stop missing required fields');
+                      return;
+                    }
+
+                    print('📍 Adding stop: $name ($location)');
+
+                    // Parse duration (simple heuristic for now)
+                    int durationMinutes = 60; // Default 1 hour
+                    if (durationStr.contains('30')) durationMinutes = 30;
+                    if (durationStr.contains('15')) durationMinutes = 15;
+                    if (durationStr.contains('2')) durationMinutes = 120;
+
+                    // Create new stop
+                    final newStop = Stop(
+                      name: name,
+                      address: location,
+                      durationMinutes: durationMinutes,
+                      latitude: lat,
+                      longitude: lng,
+                    );
+
+                    // Add to the list (modifies the list passed by reference)
+                    setState(() {
+                      widget.stops.add(newStop);
+                    });
+
+                    // Update the WebView with the new stops list
+                    _updateStopsInWebView();
+
+                    // Show confirmation
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Added "$name" to trip'),
+                          duration: const Duration(seconds: 3),
+                          backgroundColor: Colors.green,
+                        ),
+                      );
+                    }
+
+                  } catch (e) {
+                    print('⚠️ Error handling add stop request: $e');
+                  }
+                },
+              );
             },
             shouldOverrideUrlLoading: (controller, navigationAction) async {
               final url = navigationAction.request.url;
@@ -785,5 +844,26 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> with Widget
         ],
       ),
     );
+  }
+
+  void _updateStopsInWebView() {
+    if (widget.stops.isEmpty) return;
+
+    final stopsData = widget.stops.map((stop) => {
+      'name': stop.name,
+      'address': stop.address,
+      'duration': stop.durationMinutes,
+      if (stop.latitude != null) 'lat': stop.latitude,
+      if (stop.longitude != null) 'lng': stop.longitude,
+    }).toList();
+
+    final stopsJson = jsonEncode(stopsData).replaceAll("'", "\\'");
+
+    _controller?.evaluateJavascript(source: '''
+      if (window.updateStops) {
+        window.updateStops($stopsJson);
+      }
+    ''');
+    print('📍 Sent updated stops to WebView: ${widget.stops.length} stops');
   }
 }

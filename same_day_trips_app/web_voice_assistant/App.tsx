@@ -17,7 +17,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import React, {useCallback, useState, useEffect, useRef} from 'react';
+import React, { useCallback, useState, useEffect, useRef } from 'react';
 
 import ControlTray from './components/ControlTray';
 import ErrorScreen from './components/ErrorScreen';
@@ -26,7 +26,7 @@ import PopUp from './components/popup/PopUp';
 import Sidebar from './components/Sidebar';
 import { LiveAPIProvider } from './contexts/LiveAPIContext';
 import { APIProvider, useMapsLibrary, Map } from '@vis.gl/react-google-maps';
-import { Map3D, Map3DCameraProps} from './components/map-3d';
+import { Map3D, Map3DCameraProps } from './components/map-3d';
 import { useMapStore, useLogStore } from './lib/state';
 import { MapController } from './lib/map-controller';
 
@@ -66,9 +66,9 @@ function AppComponent() {
   const geocodingLib = useMapsLibrary('geocoding');
 
   const [geocoder, setGeocoder] = useState<google.maps.Geocoder | null>(null);
-  const {markers, cameraTarget, setCameraTarget, preventAutoFrame} = useMapStore();
+  const { markers, cameraTarget, setCameraTarget, preventAutoFrame } = useMapStore();
   const [padding, setPadding] = useState<[number, number, number, number]>([0.05, 0.05, 0.05, 0.35]);
-  const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null);
+  const [userLocation, setUserLocation] = useState<{ lat: number, lng: number } | null>(null);
   const [isPopupVisible, setIsPopupVisible] = useState(true);
   const [tripContext, setTripContext] = useState<string | null>(null);
 
@@ -79,7 +79,7 @@ function AppComponent() {
   // Read URL parameters from Flutter app
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    
+
     // Get location from URL
     const lat = params.get('lat');
     const lng = params.get('lng');
@@ -87,7 +87,7 @@ function AppComponent() {
     if (lat && lng) {
       setUserLocation({ lat: parseFloat(lat), lng: parseFloat(lng) });
     }
-    
+
     // Build trip context from URL parameters
     const city = params.get('city');
     const origin = params.get('origin');
@@ -95,20 +95,20 @@ function AppComponent() {
     const date = params.get('date');
     const stops = params.get('stops');
     const calendar = params.get('calendar');
-    
+
     if (city || origin || dest || (lat && lng)) {
       let context = `Trip Context:\n`;
-      
+
       // Include GPS location at the top for immediate awareness
       if (lat && lng) {
         const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-        const currentTime = new Date().toLocaleTimeString('en-US', { 
-          hour: 'numeric', 
-          minute: '2-digit', 
+        const currentTime = new Date().toLocaleTimeString('en-US', {
+          hour: 'numeric',
+          minute: '2-digit',
           hour12: true,
           timeZoneName: 'short'
         });
-        
+
         console.log('🕐 DEBUG TIME INFO:', {
           rawDate: new Date(),
           formattedTime: currentTime,
@@ -117,7 +117,7 @@ function AppComponent() {
           getHours: new Date().getHours(),
           getMinutes: new Date().getMinutes()
         });
-        
+
         if (address) {
           context += `Current Location: ${address}\n`;
           context += `GPS Coordinates: ${lat}, ${lng}\n`;
@@ -127,7 +127,7 @@ function AppComponent() {
         context += `Current Time: ${currentTime}\n`;
         context += `Timezone: ${timeZone}\n`;
       }
-      
+
       if (city) context += `City: ${city}\n`;
       if (origin) context += `Origin: ${origin}\n`;
       if (dest) context += `Destination: ${dest}\n`;
@@ -181,28 +181,28 @@ function AppComponent() {
       setTripContext(context);
       console.log('📍 Trip context loaded:', context);
     }
-    
+
     // Set up window function for Flutter to update location
     (window as any).updateLocation = (lat: number, lng: number, address?: string) => {
       const location = { lat, lng };
       setUserLocation(location);
-      
+
       // Update trip context with new location and current time
       setTripContext(prev => {
         const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-        const currentTime = new Date().toLocaleTimeString('en-US', { 
-          hour: 'numeric', 
-          minute: '2-digit', 
+        const currentTime = new Date().toLocaleTimeString('en-US', {
+          hour: 'numeric',
+          minute: '2-digit',
           hour12: true,
           timeZoneName: 'short'
         });
-        
+
         console.log('🕐 DEBUG TIME UPDATE:', {
           rawDate: new Date(),
           formattedTime: currentTime,
           timezone: timeZone,
         });
-        
+
         // Build location block with address if available
         let locationBlock = '';
         if (address) {
@@ -210,20 +210,20 @@ function AppComponent() {
         } else {
           locationBlock = `Current GPS Location: ${lat}, ${lng}\nCurrent Time: ${currentTime}\nTimezone: ${timeZone}`;
         }
-        
+
         if (!prev) return `Trip Context:\n${locationBlock}\n`;
-        
+
         // Replace existing location, time, and timezone lines or add them at the top
         const lines = prev.split('\n');
-        const hasLocation = lines.some(line => 
-          line.startsWith('Current GPS Location:') || 
+        const hasLocation = lines.some(line =>
+          line.startsWith('Current GPS Location:') ||
           line.startsWith('Current Location:')
         );
-        
+
         if (hasLocation) {
           // Remove old location, time, and timezone lines and add new block
-          const filteredLines = lines.filter(line => 
-            !line.startsWith('Current GPS Location:') && 
+          const filteredLines = lines.filter(line =>
+            !line.startsWith('Current GPS Location:') &&
             !line.startsWith('Current Location:') &&
             !line.startsWith('GPS Coordinates:') &&
             !line.startsWith('Current Time:') &&
@@ -234,7 +234,7 @@ function AppComponent() {
           return `Trip Context:\n${locationBlock}\n${prev.replace('Trip Context:\n', '')}`;
         }
       });
-      
+
       // Also fly the camera to the new location
       setCameraTarget({
         center: { ...location, altitude: 12000 },
@@ -254,19 +254,19 @@ function AppComponent() {
         console.log('🔍 DEBUG: Setting isTrafficVisible to true');
         setIsTrafficVisible(true);
         console.log('🗺️ Switching to 2D map mode');
-        
+
         // Wait a tick for React to process the state change
         setTimeout(() => {
           console.log('🔍 DEBUG: Timeout fired, checking for map2d');
           const currentMap2d = (window as any).getMap2D ? (window as any).getMap2D() : null;
           console.log('🔍 DEBUG: currentMap2d:', currentMap2d ? 'EXISTS' : 'NULL');
-          
+
           if (currentMap2d) {
             console.log('🗺️ 2D map already available');
             resolve(currentMap2d);
             return;
           }
-          
+
           // Set up a callback for when the map becomes available
           console.log('🗺️ Waiting for 2D map to initialize...');
           console.log('🔍 DEBUG: Setting __map2dReadyCallback');
@@ -283,7 +283,7 @@ function AppComponent() {
     // Expose the 2D map for tools that need it (e.g., DirectionsRenderer)
     // Expose getMap2D to tools - use window storage for immediate access
     (window as any).getMap2D = () => (window as any).__map2dInstance || map2d;
-    
+
     // Expose function to show/hide navigation button
     (window as any).showNavigationButton = (show: boolean) => {
       console.log('🔘 showNavigationButton called with:', show);
@@ -303,7 +303,7 @@ function AppComponent() {
           if (event.location) calendarContext += ` @ ${event.location}`;
           calendarContext += `\n`;
         });
-        
+
         // Update trip context with new calendar
         setTripContext(prev => {
           if (!prev) return calendarContext;
@@ -311,24 +311,63 @@ function AppComponent() {
           const baseContext = prev.split('\nToday\'s Calendar Events:')[0];
           return baseContext + calendarContext;
         });
-        
+
         console.log('📅 Calendar updated from Flutter:', calendarEvents.length, 'events');
       } catch (e) {
         console.error('Error updating calendar:', e);
       }
     };
 
+    // Set up window function for Flutter to update stops
+    (window as any).updateStops = (stopsData: any[]) => {
+      try {
+        let stopsContext = `\nPlanned Stops:\n`;
+        stopsData.forEach((stop: any, i: number) => {
+          stopsContext += `${i + 1}. ${stop.name} - ${stop.duration} minutes\n`;
+        });
+
+        // Update trip context with new stops
+        setTripContext(prev => {
+          if (!prev) return stopsContext;
+          // Remove old stops section if exists (assuming it's before calendar or at end)
+          // This is a simple string replacement strategy
+          let newContext = prev;
+          if (newContext.includes('Planned Stops:')) {
+            const parts = newContext.split('Planned Stops:');
+            const before = parts[0];
+            // Find where the next section starts (e.g., Calendar or end of string)
+            const afterParts = parts[1].split('\n\n'); // Assuming double newline separator or similar structure
+            // Actually, simpler to just rebuild or regex replace, but let's try to be safe
+            // Regex to match "Planned Stops:" until the next empty line or specific header
+            newContext = newContext.replace(/Planned Stops:[\s\S]*?(?=\n[A-Z]|$)/, stopsContext);
+          } else {
+            // Append if not found (insert before calendar if possible, or at end)
+            if (newContext.includes("Today's Calendar Events:")) {
+              newContext = newContext.replace("Today's Calendar Events:", stopsContext + "\nToday's Calendar Events:");
+            } else {
+              newContext += "\n" + stopsContext;
+            }
+          }
+          return newContext;
+        });
+
+        console.log('📍 Stops updated from Flutter:', stopsData.length, 'stops');
+      } catch (e) {
+        console.error('Error updating stops:', e);
+      }
+    };
+
     // Set up window function for Flutter to send proactive messages
     (window as any).receiveProactiveMessage = (message: string) => {
       console.log('🔔 Proactive message from Flutter:', message);
-      
+
       // Add the proactive message to the conversation log
       useLogStore.getState().addTurn({
         role: 'system',
         text: `Proactive Check-in:\n${message}`,
         isFinal: true,
       });
-      
+
       // Optional: You could also trigger the assistant to speak the message
       // This would require access to the Live API client to send text-to-speech
     };
@@ -342,17 +381,17 @@ function AppComponent() {
 
   useEffect(() => {
     if (map3d && maps3dLib && elevationLib) {
-      setMapController(new MapController({map: map3d, maps3dLib, elevationLib}));
+      setMapController(new MapController({ map: map3d, maps3dLib, elevationLib }));
     }
   }, [map3d, maps3dLib, elevationLib]);
-  
+
   useEffect(() => {
     // Only get geolocation if not already provided by Flutter app
     if (userLocation) {
       console.log('📍 Using location from Flutter app:', userLocation);
       return;
     }
-    
+
     console.log('📍 No location from Flutter, trying browser geolocation...');
     navigator.geolocation.getCurrentPosition(
       (position) => {
@@ -385,7 +424,7 @@ function AppComponent() {
 
     setIsFlying(true);
     mapController.flyTo(cameraTarget);
-    
+
     const flightTime = 5000;
     const timeoutId = setTimeout(() => {
       setIsFlying(false);
@@ -394,12 +433,12 @@ function AppComponent() {
 
     return () => clearTimeout(timeoutId);
   }, [mapController, cameraTarget, setCameraTarget]);
-  
+
   useEffect(() => {
     if (!mapController || markers.length === 0 || preventAutoFrame) return;
     mapController.frameEntities(markers, padding);
   }, [mapController, markers, padding, preventAutoFrame]);
-  
+
   useEffect(() => {
     if (mapController) {
       mapController.clearMap();
@@ -417,17 +456,17 @@ function AppComponent() {
       if (!consoleEl || !trayEl) return;
 
       const isMobile = window.matchMedia('(max-width: 768px)').matches;
-      
+
       const top = 0.05;
       const right = 0.05;
       let bottom = 0.05;
       let left = 0.05;
 
       if (!isMobile) {
-          left = Math.max(left, (consoleEl.offsetWidth / vw) + 0.02);
-          bottom = Math.max(bottom, (trayEl.offsetHeight / vh) + 0.02);
+        left = Math.max(left, (consoleEl.offsetWidth / vw) + 0.02);
+        bottom = Math.max(bottom, (trayEl.offsetHeight / vh) + 0.02);
       }
-      
+
       setPadding([top, right, bottom, left]);
     };
 
@@ -435,7 +474,7 @@ function AppComponent() {
     if (consolePanelRef.current) observer.observe(consolePanelRef.current);
     if (controlTrayRef.current) observer.observe(controlTrayRef.current);
     window.addEventListener('resize', calculatePadding);
-    
+
     calculatePadding();
 
     return () => {
@@ -488,7 +527,7 @@ function AppComponent() {
       return newValue;
     });
   }, []);
-  
+
   const handleCameraChange = useCallback((cameraProps: Map3DCameraProps) => {
     if (!isFlying) {
       setLast3dView(cameraProps);
@@ -502,25 +541,25 @@ function AppComponent() {
     // an excessively high zoom level. This has been removed.
     return Math.log2((a * document.body.clientHeight) / (range * b));
   };
-  
+
   return (
-    <LiveAPIProvider 
-        apiKey={API_KEY} 
-        map={map3d} 
-        placesLib={placesLib} 
-        elevationLib={elevationLib} 
-        geocoder={geocoder} 
-        padding={padding}
-        userLocation={userLocation}
-        tripContext={tripContext}>
+    <LiveAPIProvider
+      apiKey={API_KEY}
+      map={map3d}
+      placesLib={placesLib}
+      elevationLib={elevationLib}
+      geocoder={geocoder}
+      padding={padding}
+      userLocation={userLocation}
+      tripContext={tripContext}>
       {isPopupVisible && <PopUp onClose={() => setIsPopupVisible(false)} />}
       <div className="streaming-console">
         <div className="map-panel">
-          <div style={{display: isTrafficVisible ? 'none' : 'block', width: '100%', height: '100%'}}>
-          <Map3D
-            ref={setMap3d}
-            {...(userLocation 
-              ? {
+          <div style={{ display: isTrafficVisible ? 'none' : 'block', width: '100%', height: '100%' }}>
+            <Map3D
+              ref={setMap3d}
+              {...(userLocation
+                ? {
                   center: {
                     lat: userLocation.lat,
                     lng: userLocation.lng,
@@ -531,23 +570,23 @@ function AppComponent() {
                   heading: 0,
                   roll: 0,
                 }
-              : INITIAL_VIEW_PROPS
-            )}
-            onCameraChange={handleCameraChange}
-          />
+                : INITIAL_VIEW_PROPS
+              )}
+              onCameraChange={handleCameraChange}
+            />
           </div>
           {(() => {
             console.log('🔍 DEBUG JSX: isTrafficVisible=', isTrafficVisible);
             if (isTrafficVisible) {
               console.log('🔍 DEBUG JSX: Rendering <Map> component');
               // Try to use 3D camera view, but validate it first
-              const is3dViewValid = last3dView?.center?.lat != null && 
-                                    last3dView?.center?.lng != null &&
-                                    !isNaN(last3dView.center.lat) && 
-                                    !isNaN(last3dView.center.lng) &&
-                                    last3dView?.center?.range != null &&
-                                    !isNaN(last3dView.center.range);
-              
+              const is3dViewValid = last3dView?.center?.lat != null &&
+                last3dView?.center?.lng != null &&
+                !isNaN(last3dView.center.lat) &&
+                !isNaN(last3dView.center.lng) &&
+                last3dView?.center?.range != null &&
+                !isNaN(last3dView.center.range);
+
               let mapCenter, mapZoom;
               if (is3dViewValid) {
                 mapCenter = last3dView.center;
@@ -555,18 +594,18 @@ function AppComponent() {
                 console.log('🔍 DEBUG: Using 3D camera view:', mapCenter, 'zoom=', mapZoom);
               } else {
                 // Fallback to userLocation or Charlotte
-                mapCenter = userLocation 
+                mapCenter = userLocation
                   ? { lat: userLocation.lat, lng: userLocation.lng }
                   : { lat: 35.2271, lng: -80.8431 };
                 mapZoom = 14;
                 console.log('🔍 DEBUG: 3D view invalid, using fallback:', mapCenter, 'zoom=', mapZoom);
               }
-              
+
               // Use raw Maps API instead of React wrapper
               return (
-                <div style={{position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', zIndex: 10}}>
-                  <div 
-                    id="map-2d-container" 
+                <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', zIndex: 10 }}>
+                  <div
+                    id="map-2d-container"
                     ref={(div) => {
                       if (div && !map2d) {
                         console.log('🗺️ Creating raw Google Maps instance');
@@ -577,13 +616,13 @@ function AppComponent() {
                             disableDefaultUI: true,
                           });
                           console.log('🗺️ Map instance created!');
-                          
+
                           // Store in window FIRST for immediate access
                           (window as any).__map2dInstance = mapInstance;
-                          
+
                           // Then set state (triggers useEffect)
                           setMap2d(mapInstance);
-                          
+
                           // Call waiting callback
                           if ((window as any).__map2dReadyCallback) {
                             console.log('🔍 DEBUG: Calling __map2dReadyCallback from ref');
@@ -595,54 +634,54 @@ function AppComponent() {
                         }
                       }
                     }}
-                    style={{width: '100%', height: '100%'}}
+                    style={{ width: '100%', height: '100%' }}
                   />
-                  
+
                   {/* Floating Navigation Button - Top Right */}
                   {(() => {
                     console.log('🔘 JSX: showNavigationButton =', showNavigationButton);
                     return showNavigationButton;
                   })() && (
-                    <button
-                      className="navigation-button"
-                      onClick={() => {
-                        console.log('🔘 Navigation button clicked!');
-                        if ((window as any).__launchNavigation) {
-                          (window as any).__launchNavigation();
-                        }
-                      }}
-                      style={{
-                        position: 'fixed',
-                        top: '20px',
-                        right: '20px',
-                        padding: '12px 20px',
-                        background: 'linear-gradient(135deg, #4285F4, #34A853)',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '10px',
-                        fontSize: '15px',
-                        fontWeight: '600',
-                        cursor: 'pointer',
-                        boxShadow: '0 4px 12px rgba(66, 133, 244, 0.5)',
-                        transition: 'all 0.2s',
-                        zIndex: 1000,
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '6px'
-                      }}
-                      onMouseOver={(e) => {
-                        e.currentTarget.style.transform = 'scale(1.05)';
-                        e.currentTarget.style.boxShadow = '0 6px 16px rgba(66, 133, 244, 0.6)';
-                      }}
-                      onMouseOut={(e) => {
-                        e.currentTarget.style.transform = 'scale(1)';
-                        e.currentTarget.style.boxShadow = '0 4px 12px rgba(66, 133, 244, 0.5)';
-                      }}
-                    >
-                      <span style={{fontSize: '18px'}}>🧭</span>
-                      Start Navigation
-                    </button>
-                  )}
+                      <button
+                        className="navigation-button"
+                        onClick={() => {
+                          console.log('🔘 Navigation button clicked!');
+                          if ((window as any).__launchNavigation) {
+                            (window as any).__launchNavigation();
+                          }
+                        }}
+                        style={{
+                          position: 'fixed',
+                          top: '20px',
+                          right: '20px',
+                          padding: '12px 20px',
+                          background: 'linear-gradient(135deg, #4285F4, #34A853)',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '10px',
+                          fontSize: '15px',
+                          fontWeight: '600',
+                          cursor: 'pointer',
+                          boxShadow: '0 4px 12px rgba(66, 133, 244, 0.5)',
+                          transition: 'all 0.2s',
+                          zIndex: 1000,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px'
+                        }}
+                        onMouseOver={(e) => {
+                          e.currentTarget.style.transform = 'scale(1.05)';
+                          e.currentTarget.style.boxShadow = '0 6px 16px rgba(66, 133, 244, 0.6)';
+                        }}
+                        onMouseOut={(e) => {
+                          e.currentTarget.style.transform = 'scale(1)';
+                          e.currentTarget.style.boxShadow = '0 4px 12px rgba(66, 133, 244, 0.5)';
+                        }}
+                      >
+                        <span style={{ fontSize: '18px' }}>🧭</span>
+                        Start Navigation
+                      </button>
+                    )}
                 </div>
               );
             }
@@ -664,10 +703,10 @@ function AppComponent() {
 export default function App() {
   return (
     <APIProvider
-        version={'alpha'}
-        apiKey={API_KEY}
-        libraries={['places', 'maps3d', 'elevation', 'geocoding']}
-        solutionChannel={'gmp_aistudio_itineraryapplet_v1.0.0'}>
+      version={'alpha'}
+      apiKey={API_KEY}
+      libraries={['places', 'maps3d', 'elevation', 'geocoding']}
+      solutionChannel={'gmp_aistudio_itineraryapplet_v1.0.0'}>
       <AppComponent />
     </APIProvider>
   );

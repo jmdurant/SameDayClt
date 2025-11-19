@@ -5,6 +5,7 @@ import '../models/stop.dart';
 import '../services/mapbox_service.dart';
 import 'arrival_assistant_screen.dart';
 import 'voice_assistant_screen.dart';
+import '../car/car_controller.dart';
 
 class TripDetailScreen extends StatefulWidget {
   final Trip trip;
@@ -33,10 +34,10 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
       builder: (context) => AddStopDialog(destinationCity: widget.trip.city),
     );
 
-    if (result != null) {
       setState(() {
         _stops.add(result);
       });
+      CarController().updateAgenda(widget.trip, _stops);
     }
   }
 
@@ -147,8 +148,8 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: ElevatedButton.icon(
-                    onPressed: () {
-                      Navigator.push(
+                    onPressed: () async {
+                      await Navigator.push(
                         context,
                         MaterialPageRoute(
                           builder: (context) => VoiceAssistantScreen(
@@ -157,6 +158,8 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                           ),
                         ),
                       );
+                      setState(() {});
+                      CarController().updateAgenda(widget.trip, _stops);
                     },
                     icon: const Icon(Icons.mic),
                     label: const Text('Voice Mode'),

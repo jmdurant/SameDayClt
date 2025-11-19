@@ -180,6 +180,28 @@ class _GeminiLiveVoiceAssistantScreenState extends State<GeminiLiveVoiceAssistan
 
     try {
       final modelName = 'gemini-2.0-flash-live-001';
+      
+      // Define the tools available to the model
+      final tools = [
+        Tool(
+          functionDeclarations: [
+            FunctionDeclaration(
+              'add_stop',
+              'Add a stop to the trip itinerary. Use this when the user wants to visit a place.',
+              Schema(
+                SchemaType.object,
+                properties: {
+                  'name': Schema(SchemaType.string, description: 'The name of the place to visit'),
+                  'location': Schema(SchemaType.string, description: 'The address or city of the place'),
+                  'duration': Schema(SchemaType.string, description: 'Estimated duration of the visit (e.g., "1 hour")'),
+                },
+                requiredProperties: ['name', 'location'],
+              ),
+            ),
+          ],
+        ),
+      ];
+
       // Initiate the connection with specified parameters.
       final session = await _genAI.live.connect(
         LiveConnectParameters(
@@ -190,6 +212,7 @@ class _GeminiLiveVoiceAssistantScreenState extends State<GeminiLiveVoiceAssistan
             // Define the expected response format (modality).
             responseModalities: [Modality.TEXT],
           ),
+          tools: tools,
           // Provide system instructions to guide the model's behavior.
           systemInstruction: Content(
             parts: [
@@ -201,7 +224,8 @@ class _GeminiLiveVoiceAssistantScreenState extends State<GeminiLiveVoiceAssistan
                     "User Location: ${_currentLocation != null ? '${_currentLocation!.latitude}, ${_currentLocation!.longitude}' : 'Unknown'}. "
                     "You can help find places, add stops to itinerary, get directions, or find nearby attractions. "
                     "When suggesting places, consider proximity to the user's current location. "
-                    "Always provide comprehensive, detailed, and well-structured answers.",
+                    "Always provide comprehensive, detailed, and well-structured answers. "
+                    "If the user wants to go somewhere, use the add_stop tool to add it to their plan.",
               ),
             ],
           ),
@@ -209,6 +233,7 @@ class _GeminiLiveVoiceAssistantScreenState extends State<GeminiLiveVoiceAssistan
           callbacks: LiveCallbacks(
             onOpen: () => _updateStatus("Connection successful! Try speaking or typing."),
             onMessage: _handleLiveAPIResponse, // Called when a message is received.
+            onToolCall: _handleToolCall, // Handle tool calls
             onError: (error, stack) {
               print('🚨 Error occurred: $error');
               if (mounted) {
@@ -249,6 +274,71 @@ class _GeminiLiveVoiceAssistantScreenState extends State<GeminiLiveVoiceAssistan
         setState(() => _connectionStatus = ConnectionStatus.disconnected);
       }
     }
+  }
+
+  /// Handle tool calls from the model
+  Future<void> _handleToolCall(LiveToolCall toolCall) async {
+    print('🛠️ Tool call received: ${toolCall.functionCalls.map((f) => f.name).join(', ')}');
+    
+    final toolResponses = <FunctionResponse>[];
+
+    for (final functionCall in toolCall.functionCalls) {
+      if (functionCall.name == 'add_stop') {
+        final args = functionCall.args;
+        final name = args['name'] as String?;
+        final location = args['location'] as String?;
+        final duration = args['duration'] as String? ?? '1 hour';
+
+        if (name != null && location != null) {
+          // Execute the action
+          await _addStop(name, location, duration);
+          
+          // Create success response
+          toolResponses.add(FunctionResponse(
+            name: functionCall.name,
+            id: functionCall.id,
+            response: {'result': 'Stop "$name" added to itinerary successfully.'},
+          ));
+        } else {
+          // Create error response
+          toolResponses.add(FunctionResponse(
+            name: functionCall.name,
+            id: functionCall.id,
+            response: {'error': 'Missing name or location'},
+          ));
+        }
+      }
+    }
+
+    // Send tool responses back to the model
+    if (_session != null && toolResponses.isNotEmpty) {
+      _session!.sendToolResponse(
+        LiveClientToolResponse(
+          toolResponses: toolResponses,
+        ),
+      );
+    }
+  }
+
+  /// Add a stop to the local state
+  Future<void> _addStop(String name, String location, String duration) async {
+    setState(() {
+      widget.stops.add(Stop(
+        name: name,
+        address: location,
+        duration: duration,
+        type: StopType.activity, // Default
+        latitude: 0, // Placeholder
+        longitude: 0, // Placeholder
+      ));
+      
+      _addMessage(ChatMessage(
+        text: "✅ Added stop: $name",
+        author: Role.model,
+        timestamp: DateTime.now(),
+      ));
+    });
+    print("✅ Added stop: $name at $location");
   }
 
   // --- Message Handling ---

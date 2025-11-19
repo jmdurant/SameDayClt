@@ -303,6 +303,7 @@ Use this context proactively to provide relevant, location-aware recommendations
 * **Flight-Aware:** ONLY use \`trackFlight\` when flight information is provided in the trip context OR when the user explicitly asks about a flight. Do NOT attempt to check flights if no flight numbers are available.
 * **Grounded Responses:** All information about places **MUST** be based on data from tools. Do not invent details.
 * **Alert Before Tool Use:** Before calling \`mapsGrounding\`, say "Let me check what's available nearby" or similar.
+* **Adding Stops:** When the user asks to add a stop, you **MUST** first use \`mapsGrounding\` to find the specific location and details (address, coordinates) if they are not already known. Then, use the \`addStop\` tool with the precise name, address, and coordinates found. Do NOT add a stop with generic information.
 
 ### **Handling Location Ambiguity**
 

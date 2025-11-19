@@ -39,7 +39,7 @@ export interface ToolContext {
   elevationLib: google.maps.ElevationLibrary | null;
   geocoder: google.maps.Geocoder | null;
   padding: [number, number, number, number];
-  userLocation: {lat: number; lng: number} | null;
+  userLocation: { lat: number; lng: number } | null;
   setHeldGroundedResponse: (
     response: GenerateContentResponse | undefined,
   ) => void;
@@ -92,10 +92,10 @@ async function fetchPlaceDetailsFromChunks(
   const placesRequests = chunksToProcess.map(chunk => {
     const placeId = chunk.maps!.placeId.replace('places/', '');
     const place = new placesLib.Place({ id: placeId });
-    return place.fetchFields({ 
+    return place.fetchFields({
       fields: [
-        'location', 
-        'displayName', 
+        'location',
+        'displayName',
         'formattedAddress',
         'rating',
         'userRatingCount',
@@ -104,7 +104,7 @@ async function fetchPlaceDetailsFromChunks(
         'websiteURI',
         'regularOpeningHours',
         'types'
-      ] 
+      ]
     });
   });
 
@@ -115,10 +115,10 @@ async function fetchPlaceDetailsFromChunks(
       if (result.status !== 'fulfilled' || !result.value.place.location) {
         return null;
       }
-      
+
       const { place } = result.value;
       const originalChunk = chunksToProcess[index];
-      
+
       let showLabel = true; // Default for 'mentioned'
       if (markerBehavior === 'all') {
         showLabel = !!(responseText && originalChunk.maps?.title && responseText.includes(originalChunk.maps.title));
@@ -459,30 +459,30 @@ const getDirections: ToolImplementation = async (args, context) => {
     travelMode = 'driving'
   } = args;
   const { userLocation } = context;
-  
+
   console.log('🔍 DEBUG getDirections:', {
     origin,
     destination,
     userLocation,
     originType: typeof origin,
   });
-  
+
   // Check if origin is "my location" or not provided (use current location as default)
   const isCurrentLocation = !origin || /^(my location|current location|here|my position|my current location)$/i.test(origin);
 
   if (isCurrentLocation && userLocation) {
-      origin = `${userLocation.lat},${userLocation.lng}`;
-      console.log('✅ Using userLocation as origin:', origin);
-      useLogStore.getState().addTurn({
-          role: 'system',
-          text: `Using current location as origin: (${origin})`,
-          isFinal: true,
-      });
+    origin = `${userLocation.lat},${userLocation.lng}`;
+    console.log('✅ Using userLocation as origin:', origin);
+    useLogStore.getState().addTurn({
+      role: 'system',
+      text: `Using current location as origin: (${origin})`,
+      isFinal: true,
+    });
   } else if (isCurrentLocation && !userLocation) {
-      console.log('❌ No userLocation available!');
-      return "I can't use your current location because you haven't granted permission or it's not available.";
+    console.log('❌ No userLocation available!');
+    return "I can't use your current location because you haven't granted permission or it's not available.";
   } else {
-      console.log('✅ Using explicit origin:', origin);
+    console.log('✅ Using explicit origin:', origin);
   }
 
   if (!origin || !destination) {
@@ -530,7 +530,7 @@ const getDirections: ToolImplementation = async (args, context) => {
     // Render the directions on the 2D map (map2d is returned from switchTo2DMap promise)
     // Note: switchTo2DMap was already awaited above, so map2d should be available
     const map2d = (window as any).getMap2D ? (window as any).getMap2D() : null;
-    
+
     if (map2d) {
       // Create a new DirectionsRenderer or reuse existing one
       if (!(window as any).__directionsRenderer) {
@@ -545,7 +545,7 @@ const getDirections: ToolImplementation = async (args, context) => {
       const directionsRenderer = (window as any).__directionsRenderer;
       directionsRenderer.setMap(map2d);
       directionsRenderer.setDirections(response);
-      
+
       console.log('🗺️ Route rendered on 2D map');
       useLogStore.getState().addTurn({
         role: 'system',
@@ -562,15 +562,15 @@ const getDirections: ToolImplementation = async (args, context) => {
     const duration = leg.duration?.text || 'unknown duration';
 
     // Build the navigation URL for the "Start Navigation" button
-  const baseUrl = 'https://www.google.com/maps/dir/';
-  const params = new URLSearchParams();
-  params.append('api', '1');
-  params.append('origin', origin);
-  params.append('destination', destination);
-  if (waypoints && Array.isArray(waypoints) && waypoints.length > 0) {
-    params.append('waypoints', waypoints.join('|'));
-  }
-  params.append('travelmode', travelMode);
+    const baseUrl = 'https://www.google.com/maps/dir/';
+    const params = new URLSearchParams();
+    params.append('api', '1');
+    params.append('origin', origin);
+    params.append('destination', destination);
+    if (waypoints && Array.isArray(waypoints) && waypoints.length > 0) {
+      params.append('waypoints', waypoints.join('|'));
+    }
+    params.append('travelmode', travelMode);
     const navUrl = `${baseUrl}?${params.toString()}`;
 
     // Store navigation data for the button
@@ -596,7 +596,7 @@ const getDirections: ToolImplementation = async (args, context) => {
         (window as any).showNavigationButton(false);
       }
     };
-    
+
     // Show the floating navigation button
     console.log('🔘 Attempting to show navigation button...');
     if ((window as any).showNavigationButton) {
@@ -619,7 +619,7 @@ const getDirections: ToolImplementation = async (args, context) => {
  */
 const sendToNavigation: ToolImplementation = async (args, context) => {
   const { destination, waypoints = [] } = args;
-  
+
   // Build the navigation URL
   const baseUrl = 'https://www.google.com/maps/dir/';
   const params = new URLSearchParams();
@@ -630,7 +630,7 @@ const sendToNavigation: ToolImplementation = async (args, context) => {
   }
   params.append('travelmode', 'driving');
   const navUrl = `${baseUrl}?${params.toString()}`;
-  
+
   // Launch navigation
   if ((window as any).flutter_inappwebview) {
     await (window as any).flutter_inappwebview.callHandler('FlutterNavigation', {
@@ -649,13 +649,13 @@ const sendToNavigation: ToolImplementation = async (args, context) => {
  */
 const makePhoneCall: ToolImplementation = async (args, context) => {
   const { phoneNumber, placeName } = args;
-  
+
   console.log('📞 Making phone call:', { phoneNumber, placeName });
-  
+
   if (!phoneNumber) {
     return 'I need a phone number to make the call.';
   }
-  
+
   // Send to Flutter via JavaScript channel
   if ((window as any).flutter_inappwebview) {
     try {
@@ -663,7 +663,7 @@ const makePhoneCall: ToolImplementation = async (args, context) => {
         phoneNumber: phoneNumber,
         placeName: placeName || ''
       });
-      
+
       const placeText = placeName ? ` ${placeName}` : '';
       return `Calling${placeText} at ${phoneNumber}...`;
     } catch (error) {
@@ -684,23 +684,23 @@ const makePhoneCall: ToolImplementation = async (args, context) => {
  */
 const addCalendarEvent: ToolImplementation = async (args, context) => {
   const { title, startTime, endTime, location, description } = args;
-  
+
   console.log('📅 Adding calendar event:', { title, startTime, endTime, location, description });
   console.log('🔍 DEBUG: Window has flutter_inappwebview?', !!(window as any).flutter_inappwebview);
   console.log('🔍 DEBUG: Window has FlutterCalendar?', !!(window as any).FlutterCalendar);
-  
+
   // Validate ISO 8601 format
   const startDate = new Date(startTime);
   const endDate = new Date(endTime);
-  
+
   if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
     return `I couldn't add the event because the time format is invalid. Please provide times in ISO 8601 format (e.g., "2025-10-28T14:00:00").`;
   }
-  
+
   if (endDate <= startDate) {
     return `I couldn't add the event because the end time must be after the start time.`;
   }
-  
+
   const eventData = {
     title: title,
     startTime: startTime,
@@ -708,13 +708,13 @@ const addCalendarEvent: ToolImplementation = async (args, context) => {
     location: location || '',
     description: description || ''
   };
-  
+
   // Try the flutter_inappwebview.callHandler method first
   if ((window as any).flutter_inappwebview) {
     try {
       console.log('🔍 Trying flutter_inappwebview.callHandler...');
       await (window as any).flutter_inappwebview.callHandler('FlutterCalendar', eventData);
-      
+
       // Format the time for user-friendly confirmation
       const startTimeFormatted = startDate.toLocaleString('en-US', {
         weekday: 'short',
@@ -724,13 +724,13 @@ const addCalendarEvent: ToolImplementation = async (args, context) => {
         minute: '2-digit',
         hour12: true
       });
-      
+
       let confirmMessage = `I've added "${title}" to your calendar on ${startTimeFormatted}`;
       if (location) {
         confirmMessage += ` at ${location}`;
       }
       confirmMessage += '.';
-      
+
       return confirmMessage;
     } catch (error) {
       console.error('❌ Error adding calendar event:', error);
@@ -750,27 +750,27 @@ const getTodaysCalendarEvents: ToolImplementation = async (args, context) => {
   // In a real application, this would involve an OAuth flow and a call to the Google Calendar API.
   // For this demo, we'll return a hardcoded list of mock events with real Charlotte addresses.
   const mockEvents = [
-    { 
-      summary: 'Morning Coffee', 
-      start: '09:00 AM', 
+    {
+      summary: 'Morning Coffee',
+      start: '09:00 AM',
       end: '09:30 AM',
       location: 'Amelie\'s French Bakery, 2424 N Davidson St, Charlotte, NC 28205'
     },
-    { 
-      summary: 'Lunch Meeting', 
-      start: '12:00 PM', 
+    {
+      summary: 'Lunch Meeting',
+      start: '12:00 PM',
       end: '1:00 PM',
       location: 'Fahrenheit Restaurant, 201 S College St, Charlotte, NC 28202'
     },
-    { 
-      summary: 'Dentist Appointment', 
-      start: '2:30 PM', 
+    {
+      summary: 'Dentist Appointment',
+      start: '2:30 PM',
       end: '3:30 PM',
       location: 'Charlotte Center for Cosmetic Dentistry, 1618 E 4th St, Charlotte, NC 28204'
     },
-    { 
-      summary: 'Grocery Shopping', 
-      start: '5:00 PM', 
+    {
+      summary: 'Grocery Shopping',
+      start: '5:00 PM',
       end: '5:45 PM',
       location: 'Harris Teeter, 1704 Abbey Pl, Charlotte, NC 28209'
     },
@@ -795,23 +795,23 @@ ${JSON.stringify(mockEvents, null, 2)}
  */
 const getCurrentTime: ToolImplementation = async (args, context) => {
   const now = new Date();
-  const timeString = now.toLocaleTimeString('en-US', { 
-    hour: 'numeric', 
-    minute: '2-digit', 
+  const timeString = now.toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
     second: '2-digit',
     hour12: true,
     timeZoneName: 'short'
   });
-  
+
   const dateString = now.toLocaleDateString('en-US', {
     weekday: 'long',
     year: 'numeric',
     month: 'long',
     day: 'numeric'
   });
-  
+
   console.log('🕐 getCurrentTime called:', timeString);
-  
+
   return `Current time: ${timeString}\nDate: ${dateString}`;
 };
 
@@ -824,14 +824,14 @@ const getTravelTime: ToolImplementation = async (args, context) => {
   const isCurrentLocation = /^(my location|current location|here|my position)$/i.test(origin);
 
   if (isCurrentLocation && userLocation) {
-      origin = `${userLocation.lat},${userLocation.lng}`;
-      useLogStore.getState().addTurn({
-          role: 'system',
-          text: `Using current location as origin for travel time: (${origin})`,
-          isFinal: true,
-      });
+    origin = `${userLocation.lat},${userLocation.lng}`;
+    useLogStore.getState().addTurn({
+      role: 'system',
+      text: `Using current location as origin for travel time: (${origin})`,
+      isFinal: true,
+    });
   } else if (isCurrentLocation && !userLocation) {
-      return "I can't calculate travel time from your current location because you haven't granted permission or it's not available.";
+    return "I can't calculate travel time from your current location because you haven't granted permission or it's not available.";
   }
 
   if (!origin || !destination) {
@@ -887,7 +887,7 @@ const getTravelTime: ToolImplementation = async (args, context) => {
 
     if (response.status !== 'OK' || !response.routes || response.routes.length === 0) {
       console.warn(`⚠️ Directions API returned status: ${response.status}`);
-      
+
       // Provide detailed explanation of what went wrong
       let explanation = `I couldn't calculate travel time because `;
       if (response.status === 'NOT_FOUND') {
@@ -897,7 +897,7 @@ const getTravelTime: ToolImplementation = async (args, context) => {
       } else {
         explanation += `of an issue with the directions service (Status: ${response.status}).`;
       }
-      
+
       return explanation;
     }
 
@@ -913,14 +913,14 @@ const getTravelTime: ToolImplementation = async (args, context) => {
     console.error('❌ Error calling Directions API via JS SDK:', error);
     // Provide a more helpful error message
     const errorMsg = (error as any)?.message || 'Unknown error';
-    
+
     let explanation = `I couldn't calculate travel time. `;
     if (errorMsg.includes('NOT_FOUND') || errorMsg.includes('geocoded')) {
       explanation += `The problem is that I couldn't find one or both of these locations:\n- Origin: "${formattedOrigin}"\n- Destination: "${formattedDestination}"\n\nThis often happens when:\n1. A calendar event doesn't have a location/address\n2. The location name is too vague (e.g., just "Meeting" or "Conference")\n3. The address is incomplete\n\nPlease ask the user for a specific address like "123 Main St, Charlotte, NC" or a well-known landmark.`;
     } else {
       explanation += `Error details: ${errorMsg}`;
     }
-    
+
     return explanation;
   }
 };
@@ -967,12 +967,12 @@ const getWeatherForecast: ToolImplementation = async (args, context) => {
     // First, get the specific forecast grid URL for the coordinates
     const pointsResponse = await fetch(`https://api.weather.gov/points/${lat},${lng}`);
     if (!pointsResponse.ok) {
-        if(pointsResponse.status === 404) {
-            const errorMessage = `I could not retrieve weather data for ${location}. This service primarily covers locations in the United States.`;
-            useLogStore.getState().addTurn({ role: 'system', text: errorMessage, isFinal: true });
-            return errorMessage;
-        }
-        throw new Error(`Failed to fetch weather gridpoint. Status: ${pointsResponse.status}`);
+      if (pointsResponse.status === 404) {
+        const errorMessage = `I could not retrieve weather data for ${location}. This service primarily covers locations in the United States.`;
+        useLogStore.getState().addTurn({ role: 'system', text: errorMessage, isFinal: true });
+        return errorMessage;
+      }
+      throw new Error(`Failed to fetch weather gridpoint. Status: ${pointsResponse.status}`);
     }
     const pointsData = await pointsResponse.json();
     const forecastUrl = pointsData.properties.forecast;
@@ -989,17 +989,17 @@ const getWeatherForecast: ToolImplementation = async (args, context) => {
       throw new Error(`Failed to fetch weather forecast. Status: ${forecastResponse.status}`);
     }
     const forecastData = await forecastResponse.json();
-    
+
     // Extract the most relevant forecast text
     const todaysForecast = forecastData.properties.periods[0];
     if (!todaysForecast || !todaysForecast.detailedForecast) {
-        const errorMessage = `No detailed forecast is available for ${location} at this time.`;
-        useLogStore.getState().addTurn({ role: 'system', text: errorMessage, isFinal: true });
-        return errorMessage;
+      const errorMessage = `No detailed forecast is available for ${location} at this time.`;
+      useLogStore.getState().addTurn({ role: 'system', text: errorMessage, isFinal: true });
+      return errorMessage;
     }
 
     const forecast = todaysForecast.detailedForecast;
-    
+
     useLogStore.getState().addTurn({
       role: 'system',
       text: `Tool \`getWeatherForecast\` for "${location}" called.
@@ -1042,7 +1042,7 @@ const trackFlight: ToolImplementation = async (args, context) => {
   try {
     // Use Firebase Cloud Function proxy instead of calling FlightAware directly
     const functionUrl = 'https://us-central1-samedaytrips.cloudfunctions.net/flightawareProxy';
-    
+
     const response = await fetch(functionUrl, {
       method: 'POST',
       headers: {
@@ -1521,6 +1521,37 @@ const searchFlightsDuffel: ToolImplementation = async (args, context) => {
 };
 
 /**
+ * Tool implementation for adding a stop to the itinerary.
+ */
+const addStop: ToolImplementation = async (args, context) => {
+  const { name, location, duration, lat, lng } = args;
+
+  console.log('📍 Adding stop:', { name, location, duration, lat, lng });
+
+  // Send to Flutter via JavaScript channel
+  if ((window as any).flutter_inappwebview) {
+    try {
+      await (window as any).flutter_inappwebview.callHandler('FlutterAddStop', {
+        name,
+        location,
+        duration,
+        lat,
+        lng
+      });
+
+      return `I've added ${name} to your trip plan.`;
+    } catch (error) {
+      console.error('❌ Error adding stop:', error);
+      return `I encountered an error while trying to add ${name} to your trip.`;
+    }
+  } else {
+    // Fallback for web browser
+    console.warn('⚠️ FlutterAddStop not available');
+    return `I would add ${name} (${location}) to your trip, but I'm not running in the app right now.`;
+  }
+};
+
+/**
  * A registry mapping tool names to their implementation functions.
  * The `onToolCall` handler uses this to dispatch function calls dynamically.
  */
@@ -1540,4 +1571,5 @@ export const toolRegistry: Record<string, ToolImplementation> = {
   searchFlightsDuffel,
   requestUber,
   requestLyft,
+  addStop,
 };
