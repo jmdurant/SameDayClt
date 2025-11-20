@@ -10,6 +10,23 @@ class FlightOffer {
   // Store local hours directly from API to avoid timezone conversion issues
   final int departHourLocal;
   final int arriveHourLocal;
+  final int departMinuteLocal;
+  final int arriveMinuteLocal;
+
+  FlightOffer copyWith({double? price}) {
+    return FlightOffer(
+      departTime: departTime,
+      arriveTime: arriveTime,
+      durationMinutes: durationMinutes,
+      flightNumbers: flightNumbers,
+      numStops: numStops,
+      price: price ?? this.price,
+      departHourLocal: departHourLocal,
+      arriveHourLocal: arriveHourLocal,
+      departMinuteLocal: departMinuteLocal,
+      arriveMinuteLocal: arriveMinuteLocal,
+    );
+  }
 
   FlightOffer({
     required this.departTime,
@@ -20,6 +37,8 @@ class FlightOffer {
     required this.price,
     required this.departHourLocal,
     required this.arriveHourLocal,
+    required this.departMinuteLocal,
+    required this.arriveMinuteLocal,
   });
 
   factory FlightOffer.fromJson(Map<String, dynamic> json) {
@@ -34,11 +53,13 @@ class FlightOffer {
     final departTimeStr = firstSegment['departure']['at'] as String;
     final departTime = DateTime.parse(departTimeStr);
     final departHourLocal = int.parse(departTimeStr.substring(11, 13)); // Extract "HH" from "YYYY-MM-DDTHH:MM:SS"
+    final departMinuteLocal = int.parse(departTimeStr.substring(14, 16)); // Extract "MM"
 
     // Parse arrival time
     final arriveTimeStr = lastSegment['arrival']['at'] as String;
     final arriveTime = DateTime.parse(arriveTimeStr);
     final arriveHourLocal = int.parse(arriveTimeStr.substring(11, 13));
+    final arriveMinuteLocal = int.parse(arriveTimeStr.substring(14, 16));
 
     // Parse duration (format: "PT2H15M")
     final durationStr = itinerary['duration'] as String;
@@ -64,6 +85,8 @@ class FlightOffer {
       price: price,
       departHourLocal: departHourLocal,
       arriveHourLocal: arriveHourLocal,
+      departMinuteLocal: departMinuteLocal,
+      arriveMinuteLocal: arriveMinuteLocal,
     );
   }
 
@@ -119,20 +142,24 @@ class Destination {
 class SearchCriteria {
   final String origin;
   final String date;
+  final int earliestDepart; // Hour in 24hr format for earliest departure (e.g., 5 = 5:00 AM)
   final int departBy; // Hour in 24hr format (e.g., 9 = 9:00 AM)
   final int returnAfter; // Hour in 24hr format (e.g., 15 = 3:00 PM)
   final int returnBy; // Hour in 24hr format (e.g., 19 = 7:00 PM)
   final double minGroundTime; // Minimum hours on the ground
+  final int minDuration; // Minimum flight duration in minutes
   final int maxDuration; // Maximum flight duration in minutes
   final List<String>? destinations; // Optional specific destinations
 
   SearchCriteria({
     required this.origin,
     required this.date,
+    required this.earliestDepart,
     required this.departBy,
     required this.returnAfter,
     required this.returnBy,
     required this.minGroundTime,
+    required this.minDuration,
     required this.maxDuration,
     this.destinations,
   });

@@ -14,6 +14,7 @@ class TripSearchService {
     print('🚀 Starting same-day trip search from ${criteria.origin}');
     print('📅 Date: ${criteria.date}');
     print('⏰ Depart by: ${criteria.departBy}:00, Return: ${criteria.returnAfter}:00-${criteria.returnBy}:00');
+    print('⏱️ Flight duration limits: ${criteria.minDuration}-${criteria.maxDuration} minutes');
 
     // Step 1: Discover or use provided destinations
     List<Destination> destinations;
@@ -38,14 +39,17 @@ class TripSearchService {
       return [];
     }
 
-    // Step 2: Search destinations with optimized rate limiting for production
-    print('⚡ Searching ${destinations.length} destinations (optimized for production rate limits)...');
+    // Step 2: Search destinations with rate limiting (120 requests per 60 seconds)
+    print('⚡ Searching ${destinations.length} destinations (rate limit: 120 req/60s)...');
     final allTrips = <Trip>[];
 
-    // Process in larger batches - production allows 40 TPS vs 10 TPS in test
-    const batchSize = 12; // Increased from 3 to take advantage of production limits
+    // Optimized batching: 20 requests per batch, 10 second delay between batches
+    // This gives us 120 requests per minute, matching Duffel's rate limit
+    const batchSize = 20;
     for (var i = 0; i < destinations.length; i += batchSize) {
       final batch = destinations.skip(i).take(batchSize).toList();
+
+      print('  📦 Batch ${(i ~/ batchSize) + 1}/${(destinations.length / batchSize).ceil()}: Searching ${batch.length} destinations...');
 
       // Search batch in parallel
       final batchFutures = batch.map((dest) =>
@@ -55,9 +59,11 @@ class TripSearchService {
       final batchResults = await Future.wait(batchFutures);
       allTrips.addAll(batchResults.expand((trips) => trips));
 
-      // Minimal delay between batches - production allows 1 request per 100ms
+      // 10 second delay between batches to avoid rate limiting
       if (i + batchSize < destinations.length) {
-        await Future.delayed(Duration(milliseconds: 150)); // Reduced from 500ms
+        final nextBatchNum = (i ~/ batchSize) + 2;
+        print('  ⏳ Waiting 10s before batch $nextBatchNum (rate limit: 120 req/60s)...');
+        await Future.delayed(Duration(seconds: 10));
       }
     }
 
@@ -78,9 +84,11 @@ class TripSearchService {
         origin: criteria.origin,
         destination: destination.code,
         date: criteria.date,
+        earliestDepartHour: criteria.earliestDepart,
         departByHour: criteria.departBy,
         returnAfterHour: criteria.returnAfter,
         returnByHour: criteria.returnBy,
+        minDurationMinutes: criteria.minDuration,
         maxDurationMinutes: criteria.maxDuration,
       );
 
@@ -98,8 +106,18 @@ class TripSearchService {
           offer.returnFlight.departTime,
         );
 
+        // DEBUG: Print ground time details
+        print('    🕐 ${destination.code}: Arrive ${_amadeus.formatTime(offer.outbound.arriveTime)}, Depart ${_amadeus.formatTime(offer.returnFlight.departTime)} → Ground time: ${groundTimeHours.toStringAsFixed(2)}h (need ${criteria.minGroundTime}h)');
+
         // Double check ground time (Duffel search doesn't filter by min ground time)
         if (groundTimeHours < criteria.minGroundTime) {
+          print('    ❌ Filtered out: ${groundTimeHours.toStringAsFixed(2)}h < ${criteria.minGroundTime}h');
+          return null;
+        }
+
+        if (offer.outbound.durationMinutes < criteria.minDuration ||
+            offer.returnFlight.durationMinutes < criteria.minDuration) {
+          print('    ❌ Filtered out: flight time below ${criteria.minDuration} minutes');
           return null;
         }
 

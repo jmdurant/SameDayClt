@@ -1,23 +1,38 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:device_calendar/device_calendar.dart';
+import 'package:intl/intl.dart';
 import '../models/trip.dart';
 import '../models/stop.dart';
+import '../utils/time_formatter.dart';
 import '../services/mapbox_service.dart';
+import '../services/saved_trips_service.dart';
 import 'arrival_assistant_screen.dart';
 import 'voice_assistant_screen.dart';
 import '../car/car_controller.dart';
 
 class TripDetailScreen extends StatefulWidget {
   final Trip trip;
+  final List<Stop>? initialStops;
 
-  const TripDetailScreen({super.key, required this.trip});
+  const TripDetailScreen({super.key, required this.trip, this.initialStops});
 
   @override
   State<TripDetailScreen> createState() => _TripDetailScreenState();
 }
 
 class _TripDetailScreenState extends State<TripDetailScreen> {
-  final List<Stop> _stops = [];
+  late List<Stop> _stops;
+  final _mapboxService = MapboxService();
+
+  @override
+  void initState() {
+    super.initState();
+    _stops = widget.initialStops != null
+        ? List<Stop>.from(widget.initialStops!)
+        : [];
+    _loadCalendarStops();
+  }
 
   Future<void> _launchUrl(String? url) async {
     if (url == null || url.isEmpty) return;
@@ -34,10 +49,262 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
       builder: (context) => AddStopDialog(destinationCity: widget.trip.city),
     );
 
+    if (result != null) {
       setState(() {
         _stops.add(result);
       });
       CarController().updateAgenda(widget.trip, _stops);
+    }
+  }
+
+  Future<void> _loadCalendarStops() async {
+    DateTime? tripDate;
+    try {
+      tripDate = DateTime.parse(widget.trip.date);
+    } catch (_) {
+      tripDate = DateTime.now();
+    }
+
+    setState(() {
+      _isLoadingCalendar = true;
+      _calendarError = null;
+    });
+
+    try {
+      final plugin = DeviceCalendarPlugin();
+      final permissions = await plugin.requestPermissions();
+      if (!permissions.isSuccess || permissions.data != true) {
+        setState(() {
+          _calendarError = 'Calendar permission denied';
+          _isLoadingCalendar = false;
+        });
+        return;
+      }
+
+      final calendarsResult = await plugin.retrieveCalendars();
+      if (!calendarsResult.isSuccess || calendarsResult.data == null || calendarsResult.data!.isEmpty) {
+        setState(() {
+          _calendarError = 'No calendars available';
+          _isLoadingCalendar = false;
+        });
+        return;
+      }
+
+      final startOfDay = DateTime(tripDate.year, tripDate.month, tripDate.day);
+      final endOfDay = DateTime(tripDate.year, tripDate.month, tripDate.day, 23, 59, 59);
+
+      final newStops = <Stop>[];
+
+      for (final calendar in calendarsResult.data!) {
+        final eventsResult = await plugin.retrieveEvents(
+          calendar.id,
+          RetrieveEventsParams(startDate: startOfDay, endDate: endOfDay),
+        );
+        if (!eventsResult.isSuccess || eventsResult.data == null) continue;
+
+        for (final event in eventsResult.data!) {
+          final start = event.start;
+          if (start == null) continue;
+          final end = event.end ?? start.add(const Duration(minutes: 60));
+          final durationMinutes = end.difference(start).inMinutes.abs();
+
+          final stop = Stop(
+            id: 'cal-${event.eventId ?? event.title ?? start.microsecondsSinceEpoch}',
+            name: event.title ?? 'Calendar event',
+            address: event.location ?? '',
+            durationMinutes: durationMinutes > 0 ? durationMinutes : 60,
+            latitude: null,
+            longitude: null,
+            startTime: start,
+          );
+
+          final exists = _stops.any((s) => s.id == stop.id);
+          if (!exists) {
+            newStops.add(stop);
+          }
+        }
+      }
+
+      if (newStops.isNotEmpty) {
+        final updated = [..._stops, ...newStops];
+        updated.sort((a, b) {
+          if (a.startTime != null && b.startTime != null) {
+            return a.startTime!.compareTo(b.startTime!);
+          }
+          if (a.startTime != null) return -1;
+          if (b.startTime != null) return 1;
+          return 0;
+        });
+        setState(() {
+          _stops = updated;
+        });
+      }
+
+      setState(() {
+        _isLoadingCalendar = false;
+      });
+    } catch (e) {
+      setState(() {
+        _calendarError = 'Calendar load failed: $e';
+        _isLoadingCalendar = false;
+      });
+    }
+  }
+
+  RouteTimeline? _plannedRoute;
+  bool _isPlanningRoute = false;
+  String? _routeError;
+  bool _isLoadingCalendar = false;
+  String? _calendarError;
+
+  Future<MapLocation?> _fetchAirportLocation() async {
+    // Try destination airport by IATA code first, fall back to city name
+    final queries = [
+      '${widget.trip.destination} airport',
+      '${widget.trip.city} airport',
+    ];
+
+    for (final query in queries) {
+      final suggestions = await _mapboxService.searchPlaces(query: query);
+      if (suggestions.isEmpty) continue;
+
+      final details = await _mapboxService.retrievePlaceDetails(
+        mapboxId: suggestions.first.mapboxId,
+        sessionToken: DateTime.now().millisecondsSinceEpoch.toString(),
+      );
+      if (details != null) {
+        return MapLocation(latitude: details.latitude, longitude: details.longitude);
+      }
+    }
+    return null;
+  }
+
+  Future<void> _planDayRoute() async {
+    if (_stops.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Add at least one stop to plan the day')),
+      );
+      return;
+    }
+
+    final stopsWithCoords = _stops.where((s) => s.latitude != null && s.longitude != null).toList();
+    if (stopsWithCoords.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Stops need locations before planning the route')),
+      );
+      return;
+    }
+
+    setState(() {
+      _isPlanningRoute = true;
+      _routeError = null;
+    });
+
+    try {
+      final airportLoc = await _fetchAirportLocation();
+      if (airportLoc == null) {
+        setState(() {
+          _routeError = 'Could not find airport location for routing';
+          _isPlanningRoute = false;
+        });
+        return;
+      }
+
+      final stops = stopsWithCoords
+          .map((s) => StopWithLocation(
+                name: s.name,
+                durationMinutes: s.durationMinutes,
+                location: MapLocation(latitude: s.latitude!, longitude: s.longitude!),
+                startTime: s.startTime,
+              ))
+          .toList();
+
+      final route = await _mapboxService.planOptimalRoute(
+        airport: airportLoc,
+        stops: stops,
+      );
+
+      setState(() {
+        _plannedRoute = route;
+        _isPlanningRoute = false;
+        _routeError = route == null ? 'Unable to plan route right now' : null;
+      });
+    } catch (e) {
+      setState(() {
+        _routeError = 'Route planning failed: $e';
+        _isPlanningRoute = false;
+      });
+    }
+  }
+
+  Future<void> _saveTrip() async {
+    // Show dialog to optionally add notes
+    final notesController = TextEditingController();
+    final notes = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Save Trip'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Save this trip to your agendas?',
+              style: TextStyle(color: Colors.grey.shade700),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: notesController,
+              decoration: const InputDecoration(
+                labelText: 'Notes (optional)',
+                hintText: 'e.g., Client meeting in Houston',
+                border: OutlineInputBorder(),
+              ),
+              maxLines: 3,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton.icon(
+            onPressed: () => Navigator.pop(context, notesController.text),
+            icon: const Icon(Icons.bookmark),
+            label: const Text('Save'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blue,
+              foregroundColor: Colors.white,
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (notes != null) {
+      // Save the trip with stops
+      final savedTripsService = SavedTripsService();
+      final success = await savedTripsService.saveTrip(
+        widget.trip,
+        notes: notes.isEmpty ? null : notes,
+        stops: _stops,  // Include the stops!
+      );
+
+      if (!mounted) return;
+
+      // Show confirmation
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            success
+                ? 'Trip saved to your agendas!'
+                : 'Failed to save trip. Please try again.',
+          ),
+          backgroundColor: success ? Colors.green : Colors.red,
+          duration: const Duration(seconds: 3),
+        ),
+      );
     }
   }
 
@@ -47,6 +314,13 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
       appBar: AppBar(
         title: Text('${widget.trip.destination} Day Trip'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _saveTrip,
+        icon: const Icon(Icons.bookmark),
+        label: const Text('Save Trip'),
+        backgroundColor: Colors.blue,
+        foregroundColor: Colors.white,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
@@ -186,11 +460,10 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
               title: 'Outbound Flight',
               icon: Icons.flight_takeoff,
               flightNumber: widget.trip.outboundFlight,
-              departure: widget.trip.departOrigin,
-              arrival: widget.trip.arriveDestination,
+              departure: TimeFormatter.formatWithTimezone(widget.trip.departOrigin, widget.trip.origin),
+              arrival: TimeFormatter.formatWithTimezone(widget.trip.arriveDestination, widget.trip.destination),
               duration: widget.trip.outboundDuration,
               stops: widget.trip.outboundStops,
-              price: widget.trip.outboundPrice,
             ),
             const SizedBox(height: 16),
 
@@ -295,19 +568,35 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                                 ),
                               ),
                               const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      stop.name,
-                                      style: const TextStyle(fontWeight: FontWeight.bold),
-                                    ),
-                                    Text(
-                                      stop.address,
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: Colors.grey.shade600,
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            stop.name,
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          if (stop.startTime != null)
+                            Text(
+                              'Starts ${DateFormat('h:mm a').format(stop.startTime!)}',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.blue.shade700,
+                            ),
+                          ),
+                          if (stop.startTime != null)
+                            Text(
+                              'Starts ${DateFormat('h:mm a').format(stop.startTime!)}',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.blue.shade700,
+                              ),
+                            ),
+                          Text(
+                            stop.address,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey.shade600,
                                       ),
                                     ),
                                     Text(
@@ -324,25 +613,130 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                                 icon: const Icon(Icons.delete_outline),
                                 onPressed: () {
                                   setState(() {
-                                    _stops.removeAt(index);
-                                  });
-                                },
-                                color: Colors.red,
-                              ),
-                            ],
-                          ),
-                        );
-                      }),
-                    const SizedBox(height: 8),
-                    ElevatedButton.icon(
-                      onPressed: _addStop,
-                      icon: const Icon(Icons.add_location),
-                      label: Text(_stops.isEmpty ? 'Add Stop' : 'Add Another Stop'),
+                            _stops.removeAt(index);
+                          });
+                        },
+                        color: Colors.red,
+                      ),
+                    ],
+                  ),
+                );
+              }),
+            const SizedBox(height: 8),
+            ElevatedButton.icon(
+              onPressed: _addStop,
+              icon: const Icon(Icons.add_location),
+              label: Text(_stops.isEmpty ? 'Add Stop' : 'Add Another Stop'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue,
+                foregroundColor: Colors.white,
+              ),
+            ),
+            const SizedBox(height: 8),
+            if (_isLoadingCalendar)
+              Row(
+                children: const [
+                  SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                  SizedBox(width: 8),
+                  Text('Syncing calendar events...'),
+                ],
+              ),
+            if (_calendarError != null && !_isLoadingCalendar)
+              Text(
+                _calendarError!,
+                style: TextStyle(color: Colors.red.shade700, fontSize: 12),
+              ),
+            if (!_isLoadingCalendar && _calendarError == null)
+              Text(
+                'Calendar events for this date are included automatically.',
+                style: TextStyle(color: Colors.grey.shade700, fontSize: 12),
+              ),
+            const SizedBox(height: 8),
+            ElevatedButton.icon(
+              onPressed: _isPlanningRoute ? null : _planDayRoute,
+              icon: _isPlanningRoute
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                            )
+                          : const Icon(Icons.route),
+                      label: Text(_isPlanningRoute ? 'Planning...' : 'Plan the Day'),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blue,
+                        backgroundColor: Colors.green,
                         foregroundColor: Colors.white,
                       ),
                     ),
+                    if (_routeError != null) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        _routeError!,
+                        style: TextStyle(color: Colors.red.shade700, fontSize: 12),
+                      ),
+                    ],
+                    if (_plannedRoute != null) ...[
+                      const SizedBox(height: 12),
+                      Card(
+                        color: Colors.green.shade50,
+                        child: Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  const Icon(Icons.directions, color: Colors.green),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'Optimized Route',
+                                    style: TextStyle(
+                                      color: Colors.green.shade800,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  const Spacer(),
+                                  Text(
+                                    '${_plannedRoute!.formatDuration(_plannedRoute!.totalDrivingMinutes * 60)} driving',
+                                    style: TextStyle(color: Colors.green.shade800),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              ..._plannedRoute!.stops.asMap().entries.map((entry) {
+                                final legIndex = entry.key;
+                                final stop = entry.value;
+                                final legSeconds = _plannedRoute!.legDurations[legIndex];
+                                return Padding(
+                                  padding: const EdgeInsets.symmetric(vertical: 4),
+                                  child: Row(
+                                    children: [
+                                      Text('${legIndex + 1}. ${stop.name}', style: const TextStyle(fontWeight: FontWeight.w600)),
+                                      const Spacer(),
+                                      Text(_plannedRoute!.formatDuration(legSeconds)),
+                                    ],
+                                  ),
+                                );
+                              }),
+                              // Final leg back to airport
+                              Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 4),
+                                child: Row(
+                                  children: [
+                                    const Text('Back to airport', style: TextStyle(fontWeight: FontWeight.w600)),
+                                    const Spacer(),
+                                    Text(_plannedRoute!.formatDuration(_plannedRoute!.legDurations.last)),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -354,11 +748,10 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
               title: 'Return Flight',
               icon: Icons.flight_land,
               flightNumber: widget.trip.returnFlight,
-              departure: widget.trip.departDestination,
-              arrival: widget.trip.arriveOrigin,
+              departure: TimeFormatter.formatWithTimezone(widget.trip.departDestination, widget.trip.destination),
+              arrival: TimeFormatter.formatWithTimezone(widget.trip.arriveOrigin, widget.trip.origin),
               duration: widget.trip.returnDuration,
               stops: widget.trip.returnStops,
-              price: widget.trip.returnPrice,
             ),
             const SizedBox(height: 24),
 
@@ -563,7 +956,6 @@ class _FlightCard extends StatelessWidget {
   final String arrival;
   final String duration;
   final int stops;
-  final double price;
 
   const _FlightCard({
     required this.title,
@@ -573,7 +965,6 @@ class _FlightCard extends StatelessWidget {
     required this.arrival,
     required this.duration,
     required this.stops,
-    required this.price,
   });
 
   @override
@@ -596,14 +987,6 @@ class _FlightCard extends StatelessWidget {
                   ),
                 ),
                 const Spacer(),
-                Text(
-                  '\$${price.toStringAsFixed(0)}',
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.green,
-                  ),
-                ),
               ],
             ),
             const SizedBox(height: 12),

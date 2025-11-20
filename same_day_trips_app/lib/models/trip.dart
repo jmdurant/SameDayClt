@@ -115,6 +115,39 @@ class Trip {
     );
   }
 
+  Map<String, dynamic> toJson() {
+    return {
+      'Origin': origin,
+      'Destination': destination,
+      'City': city,
+      'Date': date,
+      'Outbound Flight': outboundFlight,
+      'Outbound Stops': outboundStops,
+      'Depart $origin': departOrigin,
+      'Arrive Destination': arriveDestination,
+      'Outbound Duration': outboundDuration,
+      'Outbound Price': outboundPrice,
+      'Return Flight': returnFlight,
+      'Return Stops': returnStops,
+      'Depart Destination': departDestination,
+      'Arrive $origin': arriveOrigin,
+      'Return Duration': returnDuration,
+      'Return Price': returnPrice,
+      'Ground Time (hours)': groundTimeHours,
+      'Ground Time': groundTime,
+      'Total Flight Cost': totalFlightCost,
+      'Total Trip Time': totalTripTime,
+      'lat': destLat,
+      'lng': destLng,
+      'Google Flights URL': googleFlightsUrl,
+      'Kayak URL': kayakUrl,
+      'Airline URL': airlineUrl,
+      'Turo URL': turoUrl,
+      'Turo Search URL': turoSearchUrl,
+      'Turo Vehicle': turoVehicle,
+    };
+  }
+
   Trip copyWith({
     double? turoPrice,
     String? awardMilesOutboundMain,

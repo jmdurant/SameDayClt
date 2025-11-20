@@ -1,8 +1,9 @@
 import 'package:dio/dio.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 /// Mapbox service for location search and routing
 class MapboxService {
-  static const String accessToken = 'pk.eyJ1IjoiZG9jdG9yZHVyYW50IiwiYSI6ImNtaDR4dzBzajAxdngyam9lcXI1aWc4engifQ.Byb5YxnnoFkLv8skfe_cFg';
+  static String get accessToken => dotenv.env['MAPBOX_ACCESS_TOKEN'] ?? '';
   static const String baseUrl = 'https://api.mapbox.com';
 
   final Dio _dio = Dio(BaseOptions(
@@ -98,7 +99,9 @@ class MapboxService {
       // Parse duration matrix
       final durations = response.data['durations'] as List? ?? [];
       return durations
-          .map((row) => (row as List).map((d) => (d as num).toDouble()).toList())
+          .map((row) => (row as List)
+              .map((d) => d == null ? double.infinity : (d as num).toDouble())
+              .toList())
           .toList();
     } catch (e) {
       print('⚠️ Mapbox Matrix API failed: $e');
@@ -140,6 +143,154 @@ class MapboxService {
       return null;
     }
   }
+
+  /// Plan the most efficient loop (airport -> stops -> airport) using the Matrix API
+  Future<RouteTimeline?> planOptimalRoute({
+    required MapLocation airport,
+    required List<StopWithLocation> stops,
+    String profile = 'driving-traffic',
+  }) async {
+    if (stops.isEmpty) return null;
+    if (stops.length == 1) {
+      return calculateRouteTimeline(airport: airport, stops: stops);
+    }
+
+    try {
+      // Build locations list for matrix: airport, stops..., airport
+      final locations = <MapLocation>[airport, ...stops.map((s) => s.location), airport];
+      final matrixSeconds = await calculateTravelTimes(locations: locations, profile: profile);
+      final matrixMinutes = matrixSeconds
+          .map((row) => row.map((d) => d / 60.0).toList())
+          .toList();
+
+      final stopCount = stops.length;
+      final stopIndexes = List.generate(stopCount, (i) => i + 1); // Matrix indexes for stops
+
+      double bestCost = double.infinity;
+      List<int> bestOrder = stopIndexes;
+
+      // Brute force permutations (stop counts are small in UI)
+      void permute(List<int> current, List<int> remaining) {
+        if (remaining.isEmpty) {
+          final cost = _evaluateOrder(current, matrixMinutes, stops);
+          if (cost != null && cost < bestCost) {
+            bestCost = cost;
+            bestOrder = List<int>.from(current);
+          }
+          return;
+        }
+
+        for (var i = 0; i < remaining.length; i++) {
+          final next = remaining[i];
+          final nextCurrent = List<int>.from(current)..add(next);
+          final nextRemaining = List<int>.from(remaining)..removeAt(i);
+          permute(nextCurrent, nextRemaining);
+        }
+      }
+
+      for (var i = 0; i < stopIndexes.length; i++) {
+        final start = stopIndexes[i];
+        final remaining = List<int>.from(stopIndexes)..removeAt(i);
+        permute([start], remaining);
+      }
+
+      if (bestCost == double.infinity) {
+        return null;
+      }
+
+      final orderedStops = bestOrder.map((idx) => stops[idx - 1]).toList();
+      final legDurations = _buildLegDurations(bestOrder, matrixMinutes);
+
+      return RouteTimeline(
+        legDurations: legDurations,
+        stops: orderedStops,
+        airport: airport,
+      );
+    } catch (e) {
+      print('?? Optimal routing failed: $e');
+      return null;
+    }
+  }
+
+  double? _evaluateOrder(
+    List<int> order,
+    List<List<double>> matrixMinutes,
+    List<StopWithLocation> stops,
+  ) {
+    final stopCount = stops.length;
+
+    double firstLeg = matrixMinutes[0][order.first];
+    if (firstLeg.isInfinite) return null;
+
+    double cumulative = firstLeg;
+    double? bestBase;
+
+    for (var o = 0; o < order.length; o++) {
+      final stop = stops[order[o] - 1];
+
+      if (stop.startTime != null) {
+        final startMinutes = stop.startTime!.hour * 60 + stop.startTime!.minute;
+        final candidateBase = startMinutes - cumulative;
+        bestBase = bestBase == null ? candidateBase : (candidateBase < bestBase ? candidateBase : bestBase);
+      }
+
+      cumulative += stop.durationMinutes.toDouble();
+
+      if (o < order.length - 1) {
+        final leg = matrixMinutes[order[o]][order[o + 1]];
+        if (leg.isInfinite) return null;
+        cumulative += leg;
+      }
+    }
+    final finalLeg = matrixMinutes[order.last][stopCount + 1];
+    if (finalLeg.isInfinite) return null;
+    cumulative += finalLeg;
+
+    final base = bestBase ?? 0;
+
+    // Validate schedule: ensure each fixed event is on time (arrival <= start)
+    double running = base + matrixMinutes[0][order.first];
+    for (var o = 0; o < order.length; o++) {
+      final stop = stops[order[o] - 1];
+
+      if (stop.startTime != null) {
+        final startMinutes = stop.startTime!.hour * 60 + stop.startTime!.minute;
+        if (running > startMinutes) {
+          return null; // late to a fixed event
+        }
+      }
+
+      running += stop.durationMinutes.toDouble();
+      if (o < order.length - 1) {
+        running += matrixMinutes[order[o]][order[o + 1]];
+      }
+    }
+
+    // Cost: total driving minutes (not counting waits)
+    double drive = 0;
+    drive += firstLeg;
+    for (var i = 0; i < order.length - 1; i++) {
+      final leg = matrixMinutes[order[i]][order[i + 1]];
+      if (leg.isInfinite) return null;
+      drive += leg;
+    }
+    drive += finalLeg;
+    return drive;
+  }
+
+  List<double> _buildLegDurations(List<int> order, List<List<double>> matrixMinutes) {
+    final stopCount = order.length;
+    final legDurations = <double>[];
+
+    legDurations.add(matrixMinutes[0][order.first] * 60);
+    for (var i = 0; i < stopCount - 1; i++) {
+      legDurations.add(matrixMinutes[order[i]][order[i + 1]] * 60);
+    }
+    legDurations.add(matrixMinutes[order.last][stopCount + 1] * 60);
+
+    return legDurations;
+  }
+
 }
 
 /// Search suggestion from Search Box API
@@ -209,11 +360,13 @@ class StopWithLocation {
   final String name;
   final int durationMinutes;
   final MapLocation location;
+  final DateTime? startTime; // Optional scheduled start
 
   StopWithLocation({
     required this.name,
     required this.durationMinutes,
     required this.location,
+    this.startTime,
   });
 }
 
@@ -246,6 +399,7 @@ class RouteTimeline {
 
   /// Format duration in seconds to "Xh YYm" or "XX min"
   String formatDuration(double seconds) {
+    if (seconds.isInfinite || seconds.isNaN) return 'N/A';
     final minutes = (seconds / 60).round();
     if (minutes < 60) {
       return '$minutes min';

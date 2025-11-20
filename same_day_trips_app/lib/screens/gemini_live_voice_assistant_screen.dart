@@ -8,6 +8,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:record/record.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 import '../models/trip.dart';
 import '../models/stop.dart';
@@ -75,8 +76,8 @@ class _GeminiLiveVoiceAssistantScreenState extends State<GeminiLiveVoiceAssistan
   @override
   void initState() {
     super.initState();
-    // Initialize the GoogleGenAI instance with the API key.
-    _genAI = GoogleGenAI(apiKey: 'AIzaSyC2bYM_bvHi9j9e8UPWFGlf_HH-ahBW1EU');
+    // Initialize the GoogleGenAI instance with the API key from environment.
+    _genAI = GoogleGenAI(apiKey: dotenv.env['GEMINI_API_KEY'] ?? '');
     // Start the connection process.
     _initialize();
     // Subscribe to the audio recorder's state to update the UI.

@@ -11,7 +11,7 @@ const corsHandler = cors({
   origin: [
     'https://samedaytrips.web.app',
     'https://samedaytrips.firebaseapp.com',
-    'http://localhost:5173', // For local development
+    /^http:\/\/localhost(:\d+)?$/, // Allow any localhost port for development
   ],
   credentials: true,
 });
@@ -100,9 +100,11 @@ export const duffelProxy = functions.https.onRequest(
           origin,
           destination,
           date,
+          earliestDepartHour = 5,
           departByHour = 9,
           returnAfterHour = 15,
           returnByHour = 19,
+          minDurationMinutes = 50,
           maxDurationMinutes = 240,
         } = req.body;
 
@@ -125,7 +127,7 @@ export const duffelProxy = functions.https.onRequest(
         }
 
         // Format time windows for Duffel (HH:MM format)
-        const departFrom = '05:00'; // Start of morning
+        const departFrom = `${earliestDepartHour.toString().padStart(2, '0')}:00`;
         const departTo = `${departByHour.toString().padStart(2, '0')}:00`;
         const returnFrom = `${returnAfterHour.toString().padStart(2, '0')}:00`;
         const returnTo = `${returnByHour.toString().padStart(2, '0')}:00`;
@@ -196,13 +198,44 @@ export const duffelProxy = functions.https.onRequest(
           const outboundSlice = slices[0];
           const returnSlice = slices[1];
 
+          // DEBUG: Log slice data to find "15:29" bug
+          console.log('🔍 DEBUG SLICES:');
+          console.log('  Outbound:', outboundSlice.origin, '→', outboundSlice.destination);
+          console.log('  Return:', returnSlice.origin, '→', returnSlice.destination);
+          if (returnSlice.segments && returnSlice.segments.length > 0) {
+            console.log('  Return first segment departing_at:', returnSlice.segments[0].departing_at);
+            console.log('  Return last segment arriving_at:', returnSlice.segments[returnSlice.segments.length - 1].arriving_at);
+          }
+
           // Parse outbound flight
           const outbound = parseSlice(outboundSlice);
           const returnFlight = parseSlice(returnSlice);
 
+          // DEBUG: Log parsed times
+          if (outbound && returnFlight) {
+            console.log('  Parsed outbound departTime:', outbound.departTime);
+            console.log('  Parsed returnFlight departTime:', returnFlight.departTime);
+          }
+
           if (!outbound || !returnFlight) continue;
 
+          // Enforce home arrival window with minute precision (latest is inclusive of :00 only)
+          const returnArrive = new Date(returnFlight.arriveTime);
+          const arriveHour = returnArrive.getHours();
+          const arriveMinute = returnArrive.getMinutes();
+          const tooEarly = arriveHour < returnAfterHour;
+          const tooLate = arriveHour > returnByHour ||
+            (arriveHour === returnByHour && arriveMinute > 0);
+          if (tooEarly || tooLate) {
+            continue;
+          }
+
           // Filter by duration
+          if (outbound.durationMinutes < minDurationMinutes ||
+              returnFlight.durationMinutes < minDurationMinutes) {
+            continue;
+          }
+
           if (outbound.durationMinutes > maxDurationMinutes ||
               returnFlight.durationMinutes > maxDurationMinutes) {
             continue;

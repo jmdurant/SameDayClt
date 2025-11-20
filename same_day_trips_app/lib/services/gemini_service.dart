@@ -1,11 +1,12 @@
 import 'package:dio/dio.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../models/trip.dart';
 import '../models/stop.dart';
 
 /// Gemini AI service with Google Maps grounding via direct REST API
 class GeminiService {
   static const String geminiApiBaseUrl = 'https://generativelanguage.googleapis.com/v1beta';
-  static const String apiKey = 'AIzaSyC2bYM_bvHi9j9e8UPWFGlf_HH-ahBW1EU';
+  static String get apiKey => dotenv.env['GEMINI_API_KEY'] ?? '';
 
   final Dio _dio = Dio(BaseOptions(
     baseUrl: geminiApiBaseUrl,

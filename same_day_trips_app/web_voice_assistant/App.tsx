@@ -30,12 +30,20 @@ import { Map3D, Map3DCameraProps } from './components/map-3d';
 import { useMapStore, useLogStore } from './lib/state';
 import { MapController } from './lib/map-controller';
 
-// Use a single API key for all services as defined by the build configuration.
-const API_KEY = "AIzaSyDqkT4UaAlYiPv6ElDA5T08925spmqcSMU";
+// Use environment variable for Google Maps API key
+const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
+// Use environment variable for Gemini API key (for Live API voice assistant)
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
-if (typeof API_KEY !== 'string') {
+if (!GOOGLE_MAPS_API_KEY || typeof GOOGLE_MAPS_API_KEY !== 'string') {
   throw new Error(
-    'Missing required environment variable: GEMINI_API_KEY is not set.'
+    'Missing required environment variable: GOOGLE_MAPS_API_KEY is not set. Please check your .env file.'
+  );
+}
+
+if (!GEMINI_API_KEY || typeof GEMINI_API_KEY !== 'string') {
+  throw new Error(
+    'Missing required environment variable: GEMINI_API_KEY is not set. Please check your .env file.'
   );
 }
 
@@ -544,7 +552,7 @@ function AppComponent() {
 
   return (
     <LiveAPIProvider
-      apiKey={API_KEY}
+      apiKey={GEMINI_API_KEY}
       map={map3d}
       placesLib={placesLib}
       elevationLib={elevationLib}
@@ -704,7 +712,7 @@ export default function App() {
   return (
     <APIProvider
       version={'alpha'}
-      apiKey={API_KEY}
+      apiKey={GOOGLE_MAPS_API_KEY}
       libraries={['places', 'maps3d', 'elevation', 'geocoding']}
       solutionChannel={'gmp_aistudio_itineraryapplet_v1.0.0'}>
       <AppComponent />

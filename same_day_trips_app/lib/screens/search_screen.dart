@@ -5,6 +5,7 @@ import '../models/trip.dart';
 import '../models/stop.dart';
 import 'results_screen.dart';
 import 'voice_assistant_screen.dart';
+import 'saved_agendas_screen.dart';
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
@@ -20,10 +21,12 @@ class _SearchScreenState extends State<SearchScreen> {
   // Form values
   String _origin = 'CLT';
   DateTime _selectedDate = DateTime.now();
+  int _earliestDepart = 5; // 5 AM - earliest departure time
   int _departBy = 9; // 9 AM - realistic for commercial flights
   int _returnAfter = 15;
   int _returnBy = 19;
   double _minGroundTime = 3.0;
+  int _minDuration = 50; // filter out very short hops
   int _maxDuration = 204; // ~3.4 hours flight time
   final List<String> _selectedDestinations = [];
 
@@ -36,9 +39,10 @@ class _SearchScreenState extends State<SearchScreen> {
     print('🔍 Starting search...');
     print('  Origin: $_origin');
     print('  Date: ${DateFormat('yyyy-MM-dd').format(_selectedDate)}');
-    print('  Depart by: $_departBy:00');
+    print('  Depart window: $_earliestDepart:00 - $_departBy:00');
     print('  Return window: $_returnAfter:00 - $_returnBy:00');
     print('  Min ground time: $_minGroundTime hrs');
+    print('  Min duration: $_minDuration min');
     print('  Max duration: $_maxDuration min');
 
     setState(() => _isSearching = true);
@@ -48,10 +52,12 @@ class _SearchScreenState extends State<SearchScreen> {
       final trips = await _apiService.searchTrips(
         origin: _origin,
         date: DateFormat('yyyy-MM-dd').format(_selectedDate),
+        earliestDepart: _earliestDepart,
         departBy: _departBy,
         returnAfter: _returnAfter,
         returnBy: _returnBy,
         minGroundTime: _minGroundTime,
+        minDuration: _minDuration,
         maxDuration: _maxDuration,
         destinations: _selectedDestinations.isEmpty ? null : _selectedDestinations,
       );
@@ -126,6 +132,70 @@ class _SearchScreenState extends State<SearchScreen> {
                         textAlign: TextAlign.center,
                       ),
                     ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // Saved Agendas Button
+              Card(
+                elevation: 4,
+                color: Colors.green.shade50,
+                child: InkWell(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const SavedAgendasScreen(),
+                      ),
+                    );
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.green,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Icon(
+                            Icons.bookmark,
+                            color: Colors.white,
+                            size: 32,
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Saved Agendas',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.green,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'View your saved trip agendas',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.grey.shade700,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const Icon(
+                          Icons.arrow_forward_ios,
+                          color: Colors.green,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -283,22 +353,45 @@ class _SearchScreenState extends State<SearchScreen> {
               ),
               const SizedBox(height: 12),
 
-              // Depart By
-              DropdownButtonFormField<int>(
-                initialValue: _departBy,
-                decoration: const InputDecoration(
-                  labelText: 'Latest Departure from Home',
-                  helperText: 'When you want to leave your home airport',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.flight_takeoff),
-                ),
-                items: List.generate(12, (i) => i + 5)
-                    .map((hour) => DropdownMenuItem(
-                          value: hour,
-                          child: Text('${hour}:00 AM'),
-                        ))
-                    .toList(),
-                onChanged: (value) => setState(() => _departBy = value!),
+              // Departure Window
+              Row(
+                children: [
+                  Expanded(
+                    child: DropdownButtonFormField<int>(
+                      initialValue: _earliestDepart,
+                      decoration: const InputDecoration(
+                        labelText: 'Earliest Departure',
+                        border: OutlineInputBorder(),
+                        prefixIcon: Icon(Icons.wb_twilight),
+                      ),
+                      items: List.generate(12, (i) => i + 5)
+                          .map((hour) => DropdownMenuItem(
+                                value: hour,
+                                child: Text('${hour}:00 AM'),
+                              ))
+                          .toList(),
+                      onChanged: (value) => setState(() => _earliestDepart = value!),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: DropdownButtonFormField<int>(
+                      initialValue: _departBy,
+                      decoration: const InputDecoration(
+                        labelText: 'Latest Departure',
+                        border: OutlineInputBorder(),
+                        prefixIcon: Icon(Icons.flight_takeoff),
+                      ),
+                      items: List.generate(12, (i) => i + 5)
+                          .map((hour) => DropdownMenuItem(
+                                value: hour,
+                                child: Text('${hour}:00 AM'),
+                              ))
+                          .toList(),
+                      onChanged: (value) => setState(() => _departBy = value!),
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 16),
 
@@ -360,12 +453,32 @@ class _SearchScreenState extends State<SearchScreen> {
 
               // Max Flight Duration
               Text(
+                'Minimum Flight Time: ${(_minDuration / 60).toStringAsFixed(1)} hours each way',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              Slider(
+                value: _minDuration.toDouble(),
+                min: 30,
+                max: 180,
+                divisions: 15,
+                label: '${(_minDuration / 60).toStringAsFixed(1)} hrs',
+                onChanged: (value) => setState(() {
+                  _minDuration = value.toInt();
+                  if (_maxDuration < _minDuration) {
+                    _maxDuration = _minDuration;
+                  }
+                }),
+              ),
+              const SizedBox(height: 16),
+
+              // Max Flight Duration
+              Text(
                 'Maximum Flight Time: ${(_maxDuration / 60).toStringAsFixed(1)} hours each way',
                 style: Theme.of(context).textTheme.titleMedium,
               ),
               Slider(
                 value: _maxDuration.toDouble(),
-                min: 60,
+                min: _minDuration.toDouble(),
                 max: 300,
                 divisions: 24,
                 label: '${(_maxDuration / 60).toStringAsFixed(1)} hrs',

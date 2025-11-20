@@ -6,6 +6,7 @@ class Stop {
   final int durationMinutes; // How long to spend at this stop
   final double? latitude;
   final double? longitude;
+  final DateTime? startTime; // Optional scheduled start time (from calendar)
 
   Stop({
     required this.id,
@@ -14,6 +15,7 @@ class Stop {
     this.durationMinutes = 30,
     this.latitude,
     this.longitude,
+    this.startTime,
   });
 
   Stop copyWith({
@@ -23,6 +25,7 @@ class Stop {
     int? durationMinutes,
     double? latitude,
     double? longitude,
+    DateTime? startTime,
   }) {
     return Stop(
       id: id ?? this.id,
@@ -31,6 +34,7 @@ class Stop {
       durationMinutes: durationMinutes ?? this.durationMinutes,
       latitude: latitude ?? this.latitude,
       longitude: longitude ?? this.longitude,
+      startTime: startTime ?? this.startTime,
     );
   }
 
@@ -42,6 +46,7 @@ class Stop {
       'durationMinutes': durationMinutes,
       'latitude': latitude,
       'longitude': longitude,
+      'startTime': startTime?.toIso8601String(),
     };
   }
 
@@ -53,6 +58,7 @@ class Stop {
       durationMinutes: json['durationMinutes'] as int? ?? 30,
       latitude: json['latitude'] as double?,
       longitude: json['longitude'] as double?,
+      startTime: json['startTime'] != null ? DateTime.tryParse(json['startTime']) : null,
     );
   }
 
@@ -66,6 +72,14 @@ class Stop {
       return '${hours}h';
     }
     return '${hours}h ${mins}m';
+  }
+
+  String? formatStartTime() {
+    if (startTime == null) return null;
+    final hour = startTime!.hour % 12 == 0 ? 12 : startTime!.hour % 12;
+    final minute = startTime!.minute.toString().padLeft(2, '0');
+    final meridian = startTime!.hour >= 12 ? 'PM' : 'AM';
+    return '$hour:$minute $meridian';
   }
 
   @override

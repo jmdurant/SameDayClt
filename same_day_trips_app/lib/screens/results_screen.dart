@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/trip.dart';
+import '../utils/time_formatter.dart';
 import 'trip_detail_screen.dart';
 
 class ResultsScreen extends StatefulWidget {
@@ -17,8 +18,8 @@ class ResultsScreen extends StatefulWidget {
 }
 
 class _ResultsScreenState extends State<ResultsScreen> {
-  String _sortBy = 'groundTime'; // groundTime, cost, totalTime
-  bool _sortAscending = false;
+  String _sortBy = 'groundTime'; // groundTime, cost, totalTime, homeDeparture, destDeparture, city
+  bool _sortAscending = true; // Start with true, groundTime will flip to descending (high to low)
 
   List<Trip> get _sortedTrips {
     final trips = List<Trip>.from(widget.trips);
@@ -31,6 +32,15 @@ class _ResultsScreenState extends State<ResultsScreen> {
           break;
         case 'totalTime':
           comparison = a.totalTripTime.compareTo(b.totalTripTime);
+          break;
+        case 'homeDeparture':
+          comparison = a.departOrigin.compareTo(b.departOrigin);
+          break;
+        case 'destDeparture':
+          comparison = a.departDestination.compareTo(b.departDestination);
+          break;
+        case 'city':
+          comparison = a.city.compareTo(b.city);
           break;
         case 'groundTime':
         default:
@@ -58,14 +68,42 @@ class _ResultsScreenState extends State<ResultsScreen> {
                   _sortAscending = !_sortAscending;
                 } else {
                   _sortBy = value;
-                  _sortAscending = false;
+                  // Set default direction based on sort type
+                  // Cost, times, and city should be ascending (low to high / early to late / A-Z)
+                  // Ground time should be descending (high to low)
+                  _sortAscending = (value == 'cost' ||
+                                   value == 'homeDeparture' ||
+                                   value == 'destDeparture' ||
+                                   value == 'totalTime' ||
+                                   value == 'city');
                 }
               });
             },
             itemBuilder: (context) => [
-              const PopupMenuItem(value: 'groundTime', child: Text('Sort by Meeting Time')),
-              const PopupMenuItem(value: 'cost', child: Text('Sort by Cost')),
-              const PopupMenuItem(value: 'totalTime', child: Text('Sort by Total Time')),
+              const PopupMenuItem(
+                value: 'groundTime',
+                child: Text('Ground Time (High to Low)'),
+              ),
+              const PopupMenuItem(
+                value: 'cost',
+                child: Text('Price (Low to High)'),
+              ),
+              const PopupMenuItem(
+                value: 'city',
+                child: Text('City/State (A-Z)'),
+              ),
+              const PopupMenuItem(
+                value: 'homeDeparture',
+                child: Text('Home Departure Time'),
+              ),
+              const PopupMenuItem(
+                value: 'destDeparture',
+                child: Text('Destination Departure Time'),
+              ),
+              const PopupMenuItem(
+                value: 'totalTime',
+                child: Text('Total Trip Time'),
+              ),
             ],
           ),
         ],
@@ -252,13 +290,9 @@ class TripCard extends StatelessWidget {
                   ),
                   Expanded(
                     child: Text(
-                      '${trip.departOrigin} → ${trip.arriveDestination}',
+                      '${TimeFormatter.formatWithTimezone(trip.departOrigin, trip.origin)} → ${TimeFormatter.formatWithTimezone(trip.arriveDestination, trip.destination)}',
                       overflow: TextOverflow.ellipsis,
                     ),
-                  ),
-                  Text(
-                    '\$${trip.outboundPrice.toStringAsFixed(0)}',
-                    style: TextStyle(color: Colors.grey.shade700),
                   ),
                 ],
               ),
@@ -282,13 +316,9 @@ class TripCard extends StatelessWidget {
                   ),
                   Expanded(
                     child: Text(
-                      '${trip.departDestination} → ${trip.arriveOrigin}',
+                      '${TimeFormatter.formatWithTimezone(trip.departDestination, trip.destination)} → ${TimeFormatter.formatWithTimezone(trip.arriveOrigin, trip.origin)}',
                       overflow: TextOverflow.ellipsis,
                     ),
-                  ),
-                  Text(
-                    '\$${trip.returnPrice.toStringAsFixed(0)}',
-                    style: TextStyle(color: Colors.grey.shade700),
                   ),
                 ],
               ),

@@ -125,12 +125,14 @@ class AmadeusService {
   List<FlightOffer> filterOutboundFlights(
     List<FlightOffer> flights,
     int maxDepartHour,
+    int minDuration,
     int maxDuration,
   ) {
     final filtered = flights.where((flight) {
       // Use local hour extracted from API string (avoids timezone conversion issues)
       final passesTime = flight.departHourLocal < maxDepartHour;
-      final passesDuration = flight.durationMinutes <= maxDuration;
+      final passesDuration = flight.durationMinutes >= minDuration &&
+          flight.durationMinutes <= maxDuration;
 
       print('      Flight ${flight.flightNumbers}: depart ${flight.departHourLocal}:xx (want <${maxDepartHour}), ${flight.durationMinutes}min (want <=${maxDuration}) - ${passesTime && passesDuration ? "PASS" : "FAIL"}');
 
@@ -145,15 +147,22 @@ class AmadeusService {
     List<FlightOffer> flights,
     int minArriveHour,
     int maxArriveHour,
+    int minDuration,
     int maxDuration,
   ) {
     final filtered = flights.where((flight) {
       // Use local hour extracted from API string (avoids timezone conversion issues)
-      final passesArrivalWindow = flight.arriveHourLocal >= minArriveHour &&
-                                   flight.arriveHourLocal < maxArriveHour;
-      final passesDuration = flight.durationMinutes <= maxDuration;
+      final afterMin = flight.arriveHourLocal > minArriveHour ||
+          flight.arriveHourLocal == minArriveHour;
+      final beforeMax = flight.arriveHourLocal < maxArriveHour ||
+          (flight.arriveHourLocal == maxArriveHour &&
+              flight.arriveMinuteLocal <= 0);
+      final passesArrivalWindow = afterMin && beforeMax;
+      final passesDuration = flight.durationMinutes >= minDuration &&
+          flight.durationMinutes <= maxDuration;
 
-      print('      Return Flight ${flight.flightNumbers}: arrive ${flight.arriveHourLocal}:xx (want ${minArriveHour}-${maxArriveHour}), ${flight.durationMinutes}min (want <=${maxDuration}) - ${passesArrivalWindow && passesDuration ? "PASS" : "FAIL"}');
+      final arriveText = '${flight.arriveHourLocal}:${flight.arriveMinuteLocal.toString().padLeft(2, '0')}';
+      print('      Return Flight ${flight.flightNumbers}: arrive $arriveText (want ${minArriveHour}:00-${maxArriveHour}:00), ${flight.durationMinutes}min (want <=${maxDuration}) - ${passesArrivalWindow && passesDuration ? "PASS" : "FAIL"}');
 
       return passesArrivalWindow && passesDuration;
     }).toList();

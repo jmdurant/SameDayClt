@@ -12,10 +12,12 @@ class ApiService {
   Future<List<Trip>> searchTrips({
     required String origin,
     required String date,
+    required int earliestDepart,
     required int departBy,
     required int returnAfter,
     required int returnBy,
     required double minGroundTime,
+    required int minDuration,
     required int maxDuration,
     List<String>? destinations,
   }) async {
@@ -27,10 +29,12 @@ class ApiService {
       final criteria = SearchCriteria(
         origin: origin,
         date: date,
+        earliestDepart: earliestDepart,
         departBy: departBy,
         returnAfter: returnAfter,
         returnBy: returnBy,
         minGroundTime: minGroundTime,
+        minDuration: minDuration,
         maxDuration: maxDuration,
         destinations: destinations,
       );

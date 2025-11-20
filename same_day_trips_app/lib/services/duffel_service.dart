@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../models/flight_offer.dart';
 
@@ -32,23 +33,66 @@ class DuffelService {
     required String origin,
     required String destination,
     required String date,
-    required int departByHour,      // e.g., 9 for 9 AM
-    required int returnAfterHour,   // e.g., 15 for 3 PM
-    required int returnByHour,      // e.g., 19 for 7 PM
+    int earliestDepartHour = 5,     // e.g., 5 for 5 AM (EARLIEST departure)
+    required int departByHour,      // e.g., 9 for 9 AM (LATEST departure)
+    required int returnAfterHour,   // e.g., 15 for 3 PM (EARLIEST home arrival)
+    required int returnByHour,      // e.g., 19 for 7 PM (LATEST home arrival)
+    int minDurationMinutes = 50,
     int maxDurationMinutes = 240,
     int maxConnections = 1,
   }) async {
+    // PLATFORM DETECTION: Use Cloud Function on web, direct API on mobile
+    if (kIsWeb) {
+      print('  🌐 WEB: Using Cloud Function proxy for Duffel API');
+      return _searchViaCloudFunction(
+        origin: origin,
+        destination: destination,
+        date: date,
+        earliestDepartHour: earliestDepartHour,
+        departByHour: departByHour,
+        returnAfterHour: returnAfterHour,
+        returnByHour: returnByHour,
+        minDurationMinutes: minDurationMinutes,
+        maxDurationMinutes: maxDurationMinutes,
+      );
+    }
+
+    // MOBILE: Use direct Duffel API
     try {
+      print('  📱 MOBILE: Using direct Duffel API');
       print('  🔍 Duffel ROUND-TRIP: $origin ↔ $destination on $date');
 
-      // Format time windows (Duffel uses HH:MM format)
-      final departFrom = '05:00'; // Start of morning
-      final departTo = '${departByHour.toString().padLeft(2, '0')}:00';
-      final returnFrom = '${returnAfterHour.toString().padLeft(2, '0')}:00';
-      final returnTo = '${returnByHour.toString().padLeft(2, '0')}:00';
+      // Calculate earliest departure time
+      final searchDate = DateTime.parse(date);
+      final now = DateTime.now();
+      final isToday = searchDate.year == now.year &&
+                      searchDate.month == now.month &&
+                      searchDate.day == now.day;
 
-      print('    ⏰ Outbound: $departFrom - $departTo');
-      print('    ⏰ Return: $returnFrom - $returnTo');
+      // If searching today, start from current time + 2 hours, otherwise use user's earliest departure time
+      int earliestHour = isToday
+          ? (now.hour + 2).clamp(0, 23)
+          : earliestDepartHour;
+
+      // Ensure departure window is at least 1 hour to satisfy Duffel's requirement
+      int latestHour = departByHour;
+      if (earliestHour >= latestHour) {
+        // Too late for today's search, no valid time window
+        print('  ⚠️ Too late to search for today (need departure before ${departByHour}:00, earliest available is ${earliestHour}:00)');
+        return null;
+      }
+
+      // Format time windows (Duffel uses HH:MM format)
+      final departFrom = '${earliestHour.toString().padLeft(2, '0')}:00';
+      final departTo = '${latestHour.toString().padLeft(2, '0')}:00';
+
+      // For return, use a wide departure window and filter by actual home arrival later
+      // This avoids timezone confusion with arrival_time filter
+      final returnDepartFrom = '12:00'; // Earliest return departure (noon)
+      final returnDepartTo = '23:59'; // Latest return departure
+
+      print('    ⏰ Outbound: Depart $departFrom - $departTo');
+      print('    ⏰ Return: Depart destination $returnDepartFrom - $returnDepartTo (filter home arrival ${returnAfterHour}:00-${returnByHour}:00 after)');
 
       final response = await _dio.post(
         '/air/offer_requests',
@@ -72,8 +116,8 @@ class DuffelService {
                 'destination': origin,
                 'departure_date': date,
                 'departure_time': {
-                  'from': returnFrom,
-                  'to': returnTo,
+                  'from': returnDepartFrom,
+                  'to': returnDepartTo,
                 }
               }
             ],
@@ -96,24 +140,45 @@ class DuffelService {
         return null;
       }
 
-      // Parse round-trip offers
+      // Parse round-trip offers with home arrival filtering
       final trips = <RoundTripOffer>[];
       for (final offer in offers) {
-        final parsed = _parseRoundTripOffer(offer, maxDurationMinutes);
+        final parsed = _parseRoundTripOffer(
+          offer,
+          minDurationMinutes,
+          maxDurationMinutes,
+          returnAfterHour,
+          returnByHour,
+        );
         if (parsed != null) {
           trips.add(parsed);
         }
       }
 
       if (trips.isEmpty) {
-        print('  ⚠️ No trips matched duration filter (<=$maxDurationMinutes min)');
+        print('  ⚠️ No trips matched filters (duration, home arrival time)');
         return null;
       }
+
+      // Deduplicate trips - keep only the cheapest option for each unique flight combination
+      final uniqueTrips = <String, RoundTripOffer>{};
+      for (final trip in trips) {
+        // Create a unique key based on flight times and numbers
+        final key = '${trip.outbound.flightNumbers}_${trip.outbound.departTime}_${trip.returnFlight.flightNumbers}_${trip.returnFlight.departTime}';
+
+        // Keep this trip if it's new or cheaper than existing one
+        if (!uniqueTrips.containsKey(key) || trip.totalPrice < uniqueTrips[key]!.totalPrice) {
+          uniqueTrips[key] = trip;
+        }
+      }
+
+      final deduplicatedTrips = uniqueTrips.values.toList();
+      print('  📋 Deduplicated: ${trips.length} offers → ${deduplicatedTrips.length} unique trips');
 
       return RoundTripFlights(
         origin: origin,
         destination: destination,
-        trips: trips,
+        trips: deduplicatedTrips,
       );
     } catch (e) {
       print('  ⚠️ Duffel round-trip error for $origin↔$destination: $e');
@@ -125,7 +190,13 @@ class DuffelService {
   }
 
   /// Parse a round-trip offer from Duffel
-  RoundTripOffer? _parseRoundTripOffer(Map<String, dynamic> offer, int maxDurationMinutes) {
+  RoundTripOffer? _parseRoundTripOffer(
+    Map<String, dynamic> offer,
+    int minDurationMinutes,
+    int maxDurationMinutes,
+    int returnAfterHour,
+    int returnByHour,
+  ) {
     try {
       final slices = offer['slices'] as List;
       if (slices.length != 2) return null; // Must have outbound + return
@@ -133,14 +204,63 @@ class DuffelService {
       final outboundSlice = slices[0] as Map<String, dynamic>;
       final returnSlice = slices[1] as Map<String, dynamic>;
 
-      final outbound = _parseSliceToFlightOffer(outboundSlice);
-      final returnFlight = _parseSliceToFlightOffer(returnSlice);
+      print('    🔍 PARSING ROUND-TRIP OFFER:');
+      print('       Slice 0 (outbound): ${outboundSlice['origin']} → ${outboundSlice['destination']}');
+      print('       Slice 1 (return): ${returnSlice['origin']} → ${returnSlice['destination']}');
+
+      // DEBUG: Check actual segment times from Duffel for BOTH slices
+      final outboundSegs = outboundSlice['segments'] as List;
+      if (outboundSegs.isNotEmpty) {
+        print('       🐛 BUG DEBUG - OUTBOUND slice segments:');
+        for (var i = 0; i < outboundSegs.length; i++) {
+          final seg = outboundSegs[i] as Map<String, dynamic>;
+          print('          Segment $i: departing_at="${seg['departing_at']}", arriving_at="${seg['arriving_at']}"');
+        }
+      }
+
+      final returnSegs = returnSlice['segments'] as List;
+      if (returnSegs.isNotEmpty) {
+        print('       🐛 BUG DEBUG - RETURN slice segments:');
+        for (var i = 0; i < returnSegs.length; i++) {
+          final seg = returnSegs[i] as Map<String, dynamic>;
+          print('          Segment $i: departing_at="${seg['departing_at']}", arriving_at="${seg['arriving_at']}"');
+        }
+      }
+
+      final outbound = _parseSliceToFlightOffer(outboundSlice, 'OUTBOUND');
+      final returnFlight = _parseSliceToFlightOffer(returnSlice, 'RETURN');
+
+      print('       🐛 BUG DEBUG - Parsed times:');
+      print('          Outbound departTime: ${outbound?.departTime}');
+      print('          Return departTime: ${returnFlight?.departTime}');
 
       if (outbound == null || returnFlight == null) return null;
 
+      // CALCULATE GROUND TIME to debug the issue
+      final groundTimeSeconds = returnFlight.departTime.difference(outbound.arriveTime).inSeconds;
+      final groundTimeHours = groundTimeSeconds / 3600.0;
+      print('       ⏱️ Ground time: ${outbound.arriveTime} (arrive dest) → ${returnFlight.departTime} (depart dest) = ${groundTimeHours.toStringAsFixed(2)}h');
+
       // Filter by duration
+      if (outbound.durationMinutes < minDurationMinutes ||
+          returnFlight.durationMinutes < minDurationMinutes) {
+        return null;
+      }
+
       if (outbound.durationMinutes > maxDurationMinutes ||
           returnFlight.durationMinutes > maxDurationMinutes) {
+        return null;
+      }
+
+      // Filter by home arrival time (return flight must arrive home between returnAfterHour and returnByHour)
+      final homeArrivalHour = returnFlight.arriveHourLocal;
+      final homeArrivalMinute = returnFlight.arriveMinuteLocal;
+      final afterWindow = homeArrivalHour < returnAfterHour;
+      final pastLatest = homeArrivalHour > returnByHour ||
+          (homeArrivalHour == returnByHour && homeArrivalMinute > 0);
+      if (afterWindow || pastLatest) {
+        final arrivalText = '${homeArrivalHour}:${homeArrivalMinute.toString().padLeft(2, '0')}';
+        print('    ! Filtered: Home arrival $arrivalText outside window $returnAfterHour:00-$returnByHour:00');
         return null;
       }
 
@@ -148,9 +268,13 @@ class DuffelService {
       final totalAmount = offer['total_amount'] as String;
       final totalPrice = double.parse(totalAmount);
 
+      // Attach price to slices so downstream UI shows costs
+      final pricedOutbound = outbound.copyWith(price: totalPrice / 2);
+      final pricedReturn = returnFlight.copyWith(price: totalPrice / 2);
+
       return RoundTripOffer(
-        outbound: outbound,
-        returnFlight: returnFlight,
+        outbound: pricedOutbound,
+        returnFlight: pricedReturn,
         totalPrice: totalPrice,
         offerId: offer['id'] as String,
       );
@@ -161,7 +285,7 @@ class DuffelService {
   }
 
   /// Parse a Duffel slice into FlightOffer
-  FlightOffer? _parseSliceToFlightOffer(Map<String, dynamic> slice) {
+  FlightOffer? _parseSliceToFlightOffer(Map<String, dynamic> slice, [String label = 'SLICE']) {
     try {
       final segments = slice['segments'] as List;
       if (segments.isEmpty) return null;
@@ -173,10 +297,15 @@ class DuffelService {
       final departingAt = firstSegment['departing_at'] as String;
       final departTime = DateTime.parse(departingAt);
       final departHourLocal = int.parse(departingAt.substring(11, 13));
+      final departMinuteLocal = int.parse(departingAt.substring(14, 16));
 
       final arrivingAt = lastSegment['arriving_at'] as String;
       final arriveTime = DateTime.parse(arrivingAt);
       final arriveHourLocal = int.parse(arrivingAt.substring(11, 13));
+      final arriveMinuteLocal = int.parse(arrivingAt.substring(14, 16));
+
+      print('       📋 $label: departing_at="$departingAt" → parsed time=$departTime, hour=$departHourLocal');
+      print('       📋 $label: arriving_at="$arrivingAt" → parsed time=$arriveTime, hour=$arriveHourLocal');
 
       // Duration
       final durationStr = slice['duration'] as String?;
@@ -209,6 +338,8 @@ class DuffelService {
         price: 0.0, // Will be set from round-trip total
         departHourLocal: departHourLocal,
         arriveHourLocal: arriveHourLocal,
+        departMinuteLocal: departMinuteLocal,
+        arriveMinuteLocal: arriveMinuteLocal,
       );
     } catch (e) {
       print('    ⚠️ Error parsing slice: $e');
@@ -287,11 +418,13 @@ class DuffelService {
       final departingAt = firstSegment['departing_at'] as String;
       final departTime = DateTime.parse(departingAt);
       final departHourLocal = int.parse(departingAt.substring(11, 13));
+      final departMinuteLocal = int.parse(departingAt.substring(14, 16));
 
       // Parse arrival time from last segment
       final arrivingAt = lastSegment['arriving_at'] as String;
       final arriveTime = DateTime.parse(arrivingAt);
       final arriveHourLocal = int.parse(arrivingAt.substring(11, 13));
+      final arriveMinuteLocal = int.parse(arrivingAt.substring(14, 16));
 
       // Calculate duration in minutes
       final durationStr = slice['duration'] as String?;
@@ -327,6 +460,8 @@ class DuffelService {
         price: price,
         departHourLocal: departHourLocal,
         arriveHourLocal: arriveHourLocal,
+        departMinuteLocal: departMinuteLocal,
+        arriveMinuteLocal: arriveMinuteLocal,
       );
     } catch (e) {
       print('    ⚠️ Error parsing Duffel offer: $e');
@@ -356,11 +491,13 @@ class DuffelService {
   List<FlightOffer> filterOutboundFlights(
     List<FlightOffer> flights,
     int maxDepartHour,
+    int minDuration,
     int maxDuration,
   ) {
     final filtered = flights.where((flight) {
       final passesTime = flight.departHourLocal < maxDepartHour;
-      final passesDuration = flight.durationMinutes <= maxDuration;
+      final passesDuration = flight.durationMinutes >= minDuration &&
+          flight.durationMinutes <= maxDuration;
 
       print('      Flight ${flight.flightNumbers}: depart ${flight.departHourLocal}:xx (want <${maxDepartHour}), ${flight.durationMinutes}min (want <=${maxDuration}) - ${passesTime && passesDuration ? "PASS" : "FAIL"}');
 
@@ -375,14 +512,21 @@ class DuffelService {
     List<FlightOffer> flights,
     int minArriveHour,
     int maxArriveHour,
+    int minDuration,
     int maxDuration,
   ) {
     final filtered = flights.where((flight) {
-      final passesArrivalWindow = flight.arriveHourLocal >= minArriveHour &&
-                                   flight.arriveHourLocal < maxArriveHour;
-      final passesDuration = flight.durationMinutes <= maxDuration;
+      final afterMin = flight.arriveHourLocal > minArriveHour ||
+          flight.arriveHourLocal == minArriveHour;
+      final beforeMax = flight.arriveHourLocal < maxArriveHour ||
+          (flight.arriveHourLocal == maxArriveHour &&
+              flight.arriveMinuteLocal <= 0);
+      final passesArrivalWindow = afterMin && beforeMax;
+      final passesDuration = flight.durationMinutes >= minDuration &&
+          flight.durationMinutes <= maxDuration;
 
-      print('      Return Flight ${flight.flightNumbers}: arrive ${flight.arriveHourLocal}:xx (want ${minArriveHour}-${maxArriveHour}), ${flight.durationMinutes}min (want <=${maxDuration}) - ${passesArrivalWindow && passesDuration ? "PASS" : "FAIL"}');
+      final arriveText = '${flight.arriveHourLocal}:${flight.arriveMinuteLocal.toString().padLeft(2, '0')}';
+      print('      Return Flight ${flight.flightNumbers}: arrive $arriveText (want ${minArriveHour}:00-${maxArriveHour}:00), ${flight.durationMinutes}min (want <=${maxDuration}) - ${passesArrivalWindow && passesDuration ? "PASS" : "FAIL"}');
 
       return passesArrivalWindow && passesDuration;
     }).toList();
@@ -405,6 +549,122 @@ class DuffelService {
   /// Format time as "HH:MM"
   String formatTime(DateTime time) {
     return '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
+  }
+
+  /// WEB ONLY: Search via Firebase Cloud Function (avoids CORS issues)
+  Future<RoundTripFlights?> _searchViaCloudFunction({
+    required String origin,
+    required String destination,
+    required String date,
+    int earliestDepartHour = 5,
+    required int departByHour,
+    required int returnAfterHour,
+    required int returnByHour,
+    int minDurationMinutes = 50,
+    int maxDurationMinutes = 240,
+  }) async {
+    try {
+      const functionUrl = 'https://us-central1-samedaytrips.cloudfunctions.net/duffelProxy';
+
+      final dio = Dio(); // Use clean Dio instance for Cloud Function
+      final response = await dio.post(
+        functionUrl,
+        data: {
+          'origin': origin,
+          'destination': destination,
+          'date': date,
+          'earliestDepartHour': earliestDepartHour,
+          'departByHour': departByHour,
+          'returnAfterHour': returnAfterHour,
+          'returnByHour': returnByHour,
+          'minDurationMinutes': minDurationMinutes,
+          'maxDurationMinutes': maxDurationMinutes,
+        },
+      );
+
+      if (response.statusCode != 200) {
+        print('  ❌ Cloud Function error: ${response.statusCode}');
+        return null;
+      }
+
+      final data = response.data as Map<String, dynamic>;
+      final trips = data['trips'] as List? ?? [];
+
+      if (trips.isEmpty) {
+        print('  ⚠️ Cloud Function returned 0 trips');
+        return null;
+      }
+
+      print('  ✅ Cloud Function returned ${trips.length} trips');
+
+      final filteredTrips = trips.where((trip) {
+        final outbound = trip['outbound'] as Map<String, dynamic>?;
+        final returnFlight = trip['returnFlight'] as Map<String, dynamic>?;
+        if (outbound == null || returnFlight == null) return false;
+
+        final outboundDuration = (outbound['durationMinutes'] as num?)?.toInt() ?? 0;
+        final returnDuration = (returnFlight['durationMinutes'] as num?)?.toInt() ?? 0;
+
+        final meetsMin = outboundDuration >= minDurationMinutes &&
+            returnDuration >= minDurationMinutes;
+        final withinMax = outboundDuration <= maxDurationMinutes &&
+            returnDuration <= maxDurationMinutes;
+
+        return meetsMin && withinMax;
+      }).toList();
+
+      if (filteredTrips.isEmpty) {
+        print('  ⚠️ Cloud Function trips filtered out by duration (min $minDurationMinutes, max $maxDurationMinutes)');
+        return null;
+      }
+
+      // Parse Cloud Function response format to our RoundTripOffer format
+      final parsedTrips = filteredTrips.map((trip) {
+        final outbound = trip['outbound'] as Map<String, dynamic>;
+        final returnFlight = trip['returnFlight'] as Map<String, dynamic>;
+
+        return RoundTripOffer(
+          outbound: FlightOffer(
+            departTime: DateTime.parse(outbound['departTime']),
+            arriveTime: DateTime.parse(outbound['arriveTime']),
+            durationMinutes: outbound['durationMinutes'] as int,
+            flightNumbers: outbound['flightNumbers'] as String,
+            numStops: outbound['numStops'] as int,
+            price: (trip['totalPrice'] as num).toDouble() / 2, // Split price
+            departHourLocal: DateTime.parse(outbound['departTime']).hour,
+            arriveHourLocal: DateTime.parse(outbound['arriveTime']).hour,
+            departMinuteLocal: DateTime.parse(outbound['departTime']).minute,
+            arriveMinuteLocal: DateTime.parse(outbound['arriveTime']).minute,
+          ),
+          returnFlight: FlightOffer(
+            departTime: DateTime.parse(returnFlight['departTime']),
+            arriveTime: DateTime.parse(returnFlight['arriveTime']),
+            durationMinutes: returnFlight['durationMinutes'] as int,
+            flightNumbers: returnFlight['flightNumbers'] as String,
+            numStops: returnFlight['numStops'] as int,
+            price: (trip['totalPrice'] as num).toDouble() / 2, // Split price
+            departHourLocal: DateTime.parse(returnFlight['departTime']).hour,
+            arriveHourLocal: DateTime.parse(returnFlight['arriveTime']).hour,
+            departMinuteLocal: DateTime.parse(returnFlight['departTime']).minute,
+            arriveMinuteLocal: DateTime.parse(returnFlight['arriveTime']).minute,
+          ),
+          totalPrice: (trip['totalPrice'] as num).toDouble(),
+          offerId: trip['offerId'] as String,
+        );
+      }).toList();
+
+      return RoundTripFlights(
+        origin: origin,
+        destination: destination,
+        trips: parsedTrips,
+      );
+    } catch (e) {
+      print('  ❌ Cloud Function call failed: $e');
+      if (e is DioException && e.response != null) {
+        print('  Response: ${e.response?.data}');
+      }
+      return null;
+    }
   }
 }
 

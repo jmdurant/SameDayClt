@@ -768,6 +768,7 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> with Widget
 
                     // Create new stop
                     final newStop = Stop(
+                      id: DateTime.now().millisecondsSinceEpoch.toString(),
                       name: name,
                       address: location,
                       durationMinutes: durationMinutes,

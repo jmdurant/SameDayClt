@@ -1,3 +1,4 @@
+import 'dart:io' show Platform;
 import 'package:flutter_carplay/flutter_carplay.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/trip_agenda.dart';
@@ -6,6 +7,7 @@ import '../models/stop.dart';
 
 class CarController {
   static final CarController _instance = CarController._internal();
+  FlutterAndroidAuto? _androidAuto;
 
   factory CarController() {
     return _instance;
@@ -14,6 +16,16 @@ class CarController {
   CarController._internal();
 
   void initialize() {
+    // Android Auto: set up basic root list template
+    if (Platform.isAndroid) {
+      _androidAuto ??= FlutterAndroidAuto();
+      _setAndroidMenu();
+      return;
+    }
+
+    // CarPlay (iOS)
+    try {
+
     FlutterCarplay.setRootTemplate(
       rootTemplate: CPListTemplate(
         sections: [
@@ -52,6 +64,10 @@ class CarController {
       ),
       animated: true,
     );
+    } catch (e) {
+      // Silently skip on platforms without CarPlay
+      print('CarPlay not available: $e');
+    }
   }
 
   void _showDemoAgenda() {
@@ -124,6 +140,7 @@ class CarController {
   }
 
   void updateAgenda(Trip trip, List<Stop> stops) {
+    // Build agenda items (shared between CarPlay and Android Auto)
     final items = <AgendaItem>[];
 
     // 1. Outbound Flight (Departure)
@@ -169,6 +186,11 @@ class CarController {
   }
 
   void _pushAgendaTemplate(TripAgenda agenda) {
+    if (Platform.isAndroid) {
+      _setAndroidAgenda(agenda);
+      return;
+    }
+
     // Convert AgendaItems to CPListItems
     final listItems = agenda.items.map((item) {
       return CPListItem(
@@ -195,6 +217,66 @@ class CarController {
       ),
       animated: true,
     );
+  }
+
+  void _setAndroidMenu() {
+    final menuTemplate = AAListTemplate(
+      title: "Same-Day Trips",
+      sections: [
+        AAListSection(
+          title: "Menu",
+          items: [
+            AAListItem(
+              title: "Same-Day Trips",
+              subtitle: "Find trips from your location",
+              onPress: (complete, self) {
+                complete();
+              },
+            ),
+            AAListItem(
+              title: "Saved Trips",
+              subtitle: "View your planned itineraries",
+              onPress: (complete, self) {
+                complete();
+              },
+            ),
+            AAListItem(
+              title: "Demo Agenda: NYC Day Trip",
+              subtitle: "Tap to view itinerary",
+              onPress: (complete, self) {
+                _showDemoAgenda();
+                complete();
+              },
+            ),
+          ],
+        ),
+      ],
+    );
+
+    FlutterAndroidAuto.setRootTemplate(template: menuTemplate);
+  }
+
+  void _setAndroidAgenda(TripAgenda agenda) {
+    final section = AAListSection(
+      title: "Itinerary for ${agenda.trip.city}",
+      items: agenda.items
+          .map((item) => AAListItem(
+                title: "${item.time} - ${item.title}",
+                subtitle: item.description,
+                onPress: (complete, self) {
+                  _launchMaps(item.locationQuery);
+                  complete();
+                },
+              ))
+          .toList(),
+    );
+
+    final template = AAListTemplate(
+      title: "${agenda.trip.city} Agenda",
+      sections: [section],
+    );
+
+    FlutterAndroidAuto.setRootTemplate(template: template);
   }
 
   Future<void> _launchMaps(String query) async {
