@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:geolocator/geolocator.dart';
 import '../services/api_service.dart';
 import '../models/trip.dart';
 import '../models/stop.dart';
 import '../theme/app_colors.dart';
 import '../theme/theme_provider.dart';
+import '../utils/airport_lookup.dart';
 import 'results_screen.dart';
 import 'voice_assistant_screen.dart';
 import 'saved_agendas_screen.dart';
@@ -34,6 +36,22 @@ class _SearchScreenState extends State<SearchScreen> {
   final List<String> _selectedDestinations = [];
 
   bool _isSearching = false;
+  bool _isDetectingAirport = false;
+  String? _detectError;
+  final TextEditingController _originController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _originController.text = _origin;
+    _autoDetectHomeAirport();
+  }
+
+  @override
+  void dispose() {
+    _originController.dispose();
+    super.dispose();
+  }
 
   // Helper function to convert decimal hours to "Xh Ymin" format
   String _formatHours(double hours) {
@@ -43,6 +61,52 @@ class _SearchScreenState extends State<SearchScreen> {
       return '${h}h';
     }
     return '${h}h ${m}min';
+  }
+
+  Future<void> _autoDetectHomeAirport() async {
+    setState(() {
+      _isDetectingAirport = true;
+      _detectError = null;
+    });
+
+    try {
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied ||
+            permission == LocationPermission.deniedForever) {
+          setState(() {
+            _detectError = 'Location permission denied';
+            _isDetectingAirport = false;
+          });
+          return;
+        }
+      }
+
+      final position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+
+      final nearest = findNearestAirport(position.latitude, position.longitude);
+      if (nearest != null) {
+        setState(() {
+          _origin = nearest;
+          _originController.text = nearest;
+          _isDetectingAirport = false;
+        });
+      } else {
+        setState(() {
+          _detectError = 'Could not find nearby airport';
+          _isDetectingAirport = false;
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _detectError = 'Auto-detect failed: $e';
+        _isDetectingAirport = false;
+      });
+    }
   }
 
 
@@ -318,16 +382,39 @@ class _SearchScreenState extends State<SearchScreen> {
 
               // Origin Airport
               TextFormField(
-                initialValue: _origin,
-                decoration: const InputDecoration(
+                controller: _originController,
+                decoration: InputDecoration(
                   labelText: 'Your Home Airport',
                   hintText: 'e.g., CLT, ATL, LAX',
-                  prefixIcon: Icon(Icons.home),
-                  border: OutlineInputBorder(),
+                  prefixIcon: const Icon(Icons.home),
+                  border: const OutlineInputBorder(),
+                  suffixIcon: _isDetectingAirport
+                      ? const Padding(
+                          padding: EdgeInsets.all(12.0),
+                          child: SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        )
+                      : IconButton(
+                          icon: const Icon(Icons.my_location),
+                          tooltip: 'Use current location',
+                          onPressed: _autoDetectHomeAirport,
+                        ),
                 ),
                 textCapitalization: TextCapitalization.characters,
                 maxLength: 3,
-                onChanged: (value) => _origin = value.toUpperCase(),
+                onChanged: (value) {
+                  final upper = value.toUpperCase();
+                  if (upper != value) {
+                    _originController.value = _originController.value.copyWith(
+                      text: upper,
+                      selection: TextSelection.collapsed(offset: upper.length),
+                    );
+                  }
+                  _origin = upper;
+                },
                 validator: (value) {
                   if (value == null || value.isEmpty) {
                     return 'Please enter your airport code';
@@ -338,6 +425,14 @@ class _SearchScreenState extends State<SearchScreen> {
                   return null;
                 },
               ),
+              if (_detectError != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4.0),
+                  child: Text(
+                    _detectError!,
+                    style: TextStyle(color: context.errorColor, fontSize: 12),
+                  ),
+                ),
               const SizedBox(height: 16),
 
               // Date Picker
