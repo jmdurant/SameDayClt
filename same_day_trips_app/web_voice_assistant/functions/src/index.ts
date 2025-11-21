@@ -336,12 +336,18 @@ function parseSlice(slice: any) {
 
     const numStops = segments.length - 1;
 
+    // Extract timezone offsets from ISO timestamps
+    const departTzOffset = extractTimezoneOffset(departingAt);
+    const arriveTzOffset = extractTimezoneOffset(arrivingAt);
+
     return {
       departTime: departTime.toISOString(),
       arriveTime: arriveTime.toISOString(),
       durationMinutes,
       flightNumbers,
       numStops,
+      departTimezoneOffset: departTzOffset,
+      arriveTimezoneOffset: arriveTzOffset,
     };
   } catch (e) {
     console.error('Error parsing slice:', e);
@@ -454,6 +460,19 @@ function generateAirlineUrl(
   }
 
   // For other airlines, return null (will use Google Flights/Kayak)
+  return null;
+}
+
+/**
+ * Extract timezone offset from ISO 8601 timestamp
+ * Example: "2025-11-15T07:35:00-05:00" -> "-05:00"
+ */
+function extractTimezoneOffset(isoTimestamp: string): string | null {
+  // ISO 8601 format: YYYY-MM-DDTHH:MM:SS±HH:MM
+  // Offset starts at position 19
+  if (isoTimestamp && isoTimestamp.length >= 25) {
+    return isoTimestamp.substring(19); // e.g., "-05:00" or "+01:00"
+  }
   return null;
 }
 
