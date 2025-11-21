@@ -89,33 +89,36 @@ class TimeFormatter {
 
   /// Convert timezone offset to abbreviation
   /// Example: "-05:00" -> "ET", "-08:00" -> "PT"
+  ///
+  /// Note: Some offsets overlap during DST transitions (e.g., -05:00 could be EST or CDT).
+  /// We map to the most common/populous timezone for each offset.
   static String _offsetToAbbreviation(String offset) {
-    // Map common US timezone offsets to abbreviations
-    // Note: This is simplified and doesn't account for DST changes
-    final Map<String, String> offsetToTz = {
-      '-05:00': 'ET',  // Eastern Time
-      '-04:00': 'ET',  // Eastern Daylight Time
-      '-06:00': 'CT',  // Central Time
-      '-05:00': 'CT',  // Central Daylight Time (conflicts with ET, will use first match)
-      '-07:00': 'MT',  // Mountain Time
-      '-06:00': 'MT',  // Mountain Daylight Time (conflicts with CT)
-      '-08:00': 'PT',  // Pacific Time
-      '-07:00': 'PT',  // Pacific Daylight Time (conflicts with MT)
-      '-09:00': 'AKT', // Alaska Time
-      '-08:00': 'AKT', // Alaska Daylight Time (conflicts with PT)
-      '-10:00': 'HT',  // Hawaii Time
-      '+00:00': 'GMT', // Greenwich Mean Time
-      '+01:00': 'CET', // Central European Time
-    };
-
-    // Try to find a match, otherwise return the offset itself (e.g., "UTC-5")
-    if (offsetToTz.containsKey(offset)) {
-      return offsetToTz[offset]!;
+    // Map timezone offsets to abbreviations (one mapping per offset)
+    // Prioritizes standard time zones (larger populations)
+    switch (offset) {
+      case '-04:00':
+        return 'ET';  // EDT (Eastern Daylight) - only ET uses -04:00
+      case '-05:00':
+        return 'ET';  // EST (Eastern Standard) - prefer EST over CDT (more populous)
+      case '-06:00':
+        return 'CT';  // CST (Central Standard) - prefer CST over MDT
+      case '-07:00':
+        return 'MT';  // MST (Mountain Standard) - prefer MST over PDT
+      case '-08:00':
+        return 'PT';  // PST (Pacific Standard) - prefer PST over AKDT (more populous)
+      case '-09:00':
+        return 'AKT'; // AKST (Alaska Standard)
+      case '-10:00':
+        return 'HT';  // HST (Hawaii Standard, no DST)
+      case '+00:00':
+        return 'GMT'; // Greenwich Mean Time
+      case '+01:00':
+        return 'CET'; // Central European Time
+      default:
+        // Format unknown offsets as "UTC±H"
+        final sign = offset.startsWith('-') ? '-' : '+';
+        final hours = int.tryParse(offset.substring(1, 3)) ?? 0;
+        return 'UTC$sign$hours';
     }
-
-    // Format offset as "UTC±H" for unknown timezones
-    final sign = offset.startsWith('-') ? '-' : '+';
-    final hours = int.tryParse(offset.substring(1, 3)) ?? 0;
-    return 'UTC$sign$hours';
   }
 }
