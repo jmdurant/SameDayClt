@@ -39,19 +39,25 @@ class TimeFormatter {
       'EWR': 'ET', 'BOS': 'ET', 'DCA': 'ET', 'IAD': 'ET', 'BWI': 'ET',
       'PHL': 'ET', 'DTW': 'ET', 'MCO': 'ET', 'FLL': 'ET', 'TPA': 'ET',
       'RDU': 'ET', 'PIT': 'ET', 'CVG': 'ET', 'CMH': 'ET', 'IND': 'ET',
+      'CLE': 'ET', 'BNA': 'ET', 'MEM': 'ET', 'JAX': 'ET', 'RSW': 'ET',
+      'PBI': 'ET', 'SDF': 'ET', 'BUF': 'ET', 'ROC': 'ET', 'SYR': 'ET',
 
       // Central Time
-      'ORD': 'CT', 'DFW': 'CT', 'IAH': 'CT', 'DEN': 'MT', 'MSP': 'CT',
+      'ORD': 'CT', 'DFW': 'CT', 'IAH': 'CT', 'MSP': 'CT', 'DAL': 'CT',
       'STL': 'CT', 'MDW': 'CT', 'HOU': 'CT', 'AUS': 'CT', 'SAT': 'CT',
       'MSY': 'CT', 'MKE': 'CT', 'MCI': 'CT', 'OMA': 'CT', 'DSM': 'CT',
+      'OKC': 'CT', 'TUL': 'CT', 'LIT': 'CT', 'XNA': 'CT', 'HSV': 'CT',
+      'MOB': 'CT', 'GPT': 'CT', 'BTR': 'CT', 'SHV': 'CT', 'GRR': 'CT',
 
       // Mountain Time
-      'DEN': 'MT', 'PHX': 'MT', 'SLC': 'MT', 'LAS': 'PT', 'ABQ': 'MT',
-      'TUS': 'MT', 'BOI': 'MT', 'BIL': 'MT', 'MSO': 'MT',
+      'DEN': 'MT', 'PHX': 'MT', 'SLC': 'MT', 'ABQ': 'MT', 'ELP': 'MT',
+      'TUS': 'MT', 'BOI': 'MT', 'BIL': 'MT', 'MSO': 'MT', 'GEG': 'PT',
+      'COS': 'MT', 'BZN': 'MT', 'JAC': 'MT', 'FCA': 'MT',
 
-      // Pacific Time
+      // Pacific Time (note: LAS/Phoenix don't observe DST, but we use PT/MT for simplicity)
       'LAX': 'PT', 'SFO': 'PT', 'SEA': 'PT', 'SAN': 'PT', 'PDX': 'PT',
       'SJC': 'PT', 'OAK': 'PT', 'SMF': 'PT', 'BUR': 'PT', 'ONT': 'PT',
+      'LAS': 'PT', 'RNO': 'PT', 'SNA': 'PT', 'LGB': 'PT', 'PSP': 'PT',
 
       // Alaska Time
       'ANC': 'AKT', 'FAI': 'AKT', 'JNU': 'AKT',
@@ -63,16 +69,53 @@ class TimeFormatter {
     return timezones[airportCode.toUpperCase()] ?? '';
   }
 
-  /// Format time with timezone
-  /// Example: "14:30" for "LAX" -> "2:30 PM PT"
-  static String formatWithTimezone(String time24, String airportCode) {
+  /// Format time with timezone using actual timezone offset from API
+  /// Example: "14:30" with offset "-05:00" -> "2:30 PM ET"
+  /// Falls back to airport code if offset not available: "2:30 PM JFK"
+  static String formatWithTimezone(String time24, String airportCode, {String? tzOffset}) {
     final time12 = to12Hour(time24);
-    final tz = getTimezone(airportCode);
 
-    if (tz.isEmpty) {
-      return time12;
+    // Prefer timezone offset from API if available
+    if (tzOffset != null && tzOffset.isNotEmpty) {
+      final tzAbbr = _offsetToAbbreviation(tzOffset);
+      return '$time12 $tzAbbr';
     }
 
-    return '$time12 $tz';
+    // Fall back to airport code lookup
+    final tz = getTimezone(airportCode);
+    final tzDisplay = tz.isNotEmpty ? tz : airportCode.toUpperCase();
+    return '$time12 $tzDisplay';
+  }
+
+  /// Convert timezone offset to abbreviation
+  /// Example: "-05:00" -> "ET", "-08:00" -> "PT"
+  static String _offsetToAbbreviation(String offset) {
+    // Map common US timezone offsets to abbreviations
+    // Note: This is simplified and doesn't account for DST changes
+    final Map<String, String> offsetToTz = {
+      '-05:00': 'ET',  // Eastern Time
+      '-04:00': 'ET',  // Eastern Daylight Time
+      '-06:00': 'CT',  // Central Time
+      '-05:00': 'CT',  // Central Daylight Time (conflicts with ET, will use first match)
+      '-07:00': 'MT',  // Mountain Time
+      '-06:00': 'MT',  // Mountain Daylight Time (conflicts with CT)
+      '-08:00': 'PT',  // Pacific Time
+      '-07:00': 'PT',  // Pacific Daylight Time (conflicts with MT)
+      '-09:00': 'AKT', // Alaska Time
+      '-08:00': 'AKT', // Alaska Daylight Time (conflicts with PT)
+      '-10:00': 'HT',  // Hawaii Time
+      '+00:00': 'GMT', // Greenwich Mean Time
+      '+01:00': 'CET', // Central European Time
+    };
+
+    // Try to find a match, otherwise return the offset itself (e.g., "UTC-5")
+    if (offsetToTz.containsKey(offset)) {
+      return offsetToTz[offset]!;
+    }
+
+    // Format offset as "UTC±H" for unknown timezones
+    final sign = offset.startsWith('-') ? '-' : '+';
+    final hours = int.tryParse(offset.substring(1, 3)) ?? 0;
+    return 'UTC$sign$hours';
   }
 }

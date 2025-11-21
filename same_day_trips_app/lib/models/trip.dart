@@ -18,6 +18,12 @@ class Trip {
   final String returnDuration;
   final double returnPrice;
 
+  // Timezone offsets (e.g., "-05:00", "+01:00")
+  final String? departOriginTz;
+  final String? arriveDestinationTz;
+  final String? departDestinationTz;
+  final String? arriveOriginTz;
+
   final double groundTimeHours;
   final String groundTime;
   final double totalFlightCost;
@@ -63,6 +69,10 @@ class Trip {
     required this.arriveOrigin,
     required this.returnDuration,
     required this.returnPrice,
+    this.departOriginTz,
+    this.arriveDestinationTz,
+    this.departDestinationTz,
+    this.arriveOriginTz,
     required this.groundTimeHours,
     required this.groundTime,
     required this.totalFlightCost,
@@ -100,6 +110,10 @@ class Trip {
       arriveOrigin: json['Arrive ${json['Origin']}'] ?? json['Arrive CLT'] ?? '',
       returnDuration: json['Return Duration'] ?? '',
       returnPrice: (json['Return Price'] ?? 0.0).toDouble(),
+      departOriginTz: json['Depart Origin TZ'],
+      arriveDestinationTz: json['Arrive Destination TZ'],
+      departDestinationTz: json['Depart Destination TZ'],
+      arriveOriginTz: json['Arrive Origin TZ'],
       groundTimeHours: (json['Ground Time (hours)'] ?? 0.0).toDouble(),
       groundTime: json['Ground Time'] ?? '',
       totalFlightCost: (json['Total Flight Cost'] ?? 0.0).toDouble(),
@@ -133,6 +147,10 @@ class Trip {
       'Arrive $origin': arriveOrigin,
       'Return Duration': returnDuration,
       'Return Price': returnPrice,
+      'Depart Origin TZ': departOriginTz,
+      'Arrive Destination TZ': arriveDestinationTz,
+      'Depart Destination TZ': departDestinationTz,
+      'Arrive Origin TZ': arriveOriginTz,
       'Ground Time (hours)': groundTimeHours,
       'Ground Time': groundTime,
       'Total Flight Cost': totalFlightCost,
@@ -174,6 +192,10 @@ class Trip {
       arriveOrigin: arriveOrigin,
       returnDuration: returnDuration,
       returnPrice: returnPrice,
+      departOriginTz: departOriginTz,
+      arriveDestinationTz: arriveDestinationTz,
+      departDestinationTz: departDestinationTz,
+      arriveOriginTz: arriveOriginTz,
       groundTimeHours: groundTimeHours,
       groundTime: groundTime,
       totalFlightCost: totalFlightCost,

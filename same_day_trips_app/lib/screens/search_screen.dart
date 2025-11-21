@@ -35,6 +35,16 @@ class _SearchScreenState extends State<SearchScreen> {
 
   bool _isSearching = false;
 
+  // Helper function to convert decimal hours to "Xh Ymin" format
+  String _formatHours(double hours) {
+    final h = hours.floor();
+    final m = ((hours - h) * 60).round();
+    if (m == 0) {
+      return '${h}h';
+    }
+    return '${h}h ${m}min';
+  }
+
 
   Future<void> _searchTrips() async {
     if (!_formKey.currentState!.validate()) return;
@@ -452,7 +462,7 @@ class _SearchScreenState extends State<SearchScreen> {
 
               // Ground Time
               Text(
-                'Minimum Meeting Time: ${_minGroundTime.toStringAsFixed(1)} hours',
+                'Minimum Meeting Time: ${_formatHours(_minGroundTime)}',
                 style: Theme.of(context).textTheme.titleMedium,
               ),
               Slider(
@@ -460,14 +470,14 @@ class _SearchScreenState extends State<SearchScreen> {
                 min: 2.0,
                 max: 8.0,
                 divisions: 12,
-                label: '${_minGroundTime.toStringAsFixed(1)} hrs',
+                label: _formatHours(_minGroundTime),
                 onChanged: (value) => setState(() => _minGroundTime = value),
               ),
               const SizedBox(height: 16),
 
-              // Max Flight Duration
+              // Min Flight Duration
               Text(
-                'Minimum Flight Time: ${(_minDuration / 60).toStringAsFixed(1)} hours each way',
+                'Minimum Flight Time: ${_formatHours(_minDuration / 60)} each way',
                 style: Theme.of(context).textTheme.titleMedium,
               ),
               Slider(
@@ -475,7 +485,7 @@ class _SearchScreenState extends State<SearchScreen> {
                 min: 30,
                 max: 180,
                 divisions: 15,
-                label: '${(_minDuration / 60).toStringAsFixed(1)} hrs',
+                label: _formatHours(_minDuration / 60),
                 onChanged: (value) => setState(() {
                   _minDuration = value.toInt();
                   if (_maxDuration < _minDuration) {
@@ -487,7 +497,7 @@ class _SearchScreenState extends State<SearchScreen> {
 
               // Max Flight Duration
               Text(
-                'Maximum Flight Time: ${(_maxDuration / 60).toStringAsFixed(1)} hours each way',
+                'Maximum Flight Time: ${_formatHours(_maxDuration / 60)} each way',
                 style: Theme.of(context).textTheme.titleMedium,
               ),
               Slider(
@@ -495,7 +505,7 @@ class _SearchScreenState extends State<SearchScreen> {
                 min: _minDuration.toDouble(),
                 max: 300,
                 divisions: 24,
-                label: '${(_maxDuration / 60).toStringAsFixed(1)} hrs',
+                label: _formatHours(_maxDuration / 60),
                 onChanged: (value) => setState(() => _maxDuration = value.toInt()),
               ),
               const SizedBox(height: 24),

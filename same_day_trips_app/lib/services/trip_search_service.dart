@@ -177,6 +177,12 @@ class TripSearchService {
       returnDuration: returnFlight.formatDuration(),
       returnPrice: returnFlight.price,
 
+      // Timezone offsets
+      departOriginTz: outbound.departTimezoneOffset,
+      arriveDestinationTz: outbound.arriveTimezoneOffset,
+      departDestinationTz: returnFlight.departTimezoneOffset,
+      arriveOriginTz: returnFlight.arriveTimezoneOffset,
+
       // Totals
       groundTimeHours: double.parse(groundTimeHours.toStringAsFixed(2)),
       groundTime: _amadeus.formatDuration((groundTimeHours * 60).round()),

@@ -13,6 +13,10 @@ class FlightOffer {
   final int departMinuteLocal;
   final int arriveMinuteLocal;
 
+  // Store timezone offsets from API (e.g., "-05:00", "+01:00")
+  final String? departTimezoneOffset;
+  final String? arriveTimezoneOffset;
+
   FlightOffer copyWith({double? price}) {
     return FlightOffer(
       departTime: departTime,
@@ -25,6 +29,8 @@ class FlightOffer {
       arriveHourLocal: arriveHourLocal,
       departMinuteLocal: departMinuteLocal,
       arriveMinuteLocal: arriveMinuteLocal,
+      departTimezoneOffset: departTimezoneOffset,
+      arriveTimezoneOffset: arriveTimezoneOffset,
     );
   }
 
@@ -39,6 +45,8 @@ class FlightOffer {
     required this.arriveHourLocal,
     required this.departMinuteLocal,
     required this.arriveMinuteLocal,
+    this.departTimezoneOffset,
+    this.arriveTimezoneOffset,
   });
 
   factory FlightOffer.fromJson(Map<String, dynamic> json) {
@@ -54,12 +62,14 @@ class FlightOffer {
     final departTime = DateTime.parse(departTimeStr);
     final departHourLocal = int.parse(departTimeStr.substring(11, 13)); // Extract "HH" from "YYYY-MM-DDTHH:MM:SS"
     final departMinuteLocal = int.parse(departTimeStr.substring(14, 16)); // Extract "MM"
+    final departTzOffset = _extractTimezoneOffset(departTimeStr);
 
     // Parse arrival time
     final arriveTimeStr = lastSegment['arrival']['at'] as String;
     final arriveTime = DateTime.parse(arriveTimeStr);
     final arriveHourLocal = int.parse(arriveTimeStr.substring(11, 13));
     final arriveMinuteLocal = int.parse(arriveTimeStr.substring(14, 16));
+    final arriveTzOffset = _extractTimezoneOffset(arriveTimeStr);
 
     // Parse duration (format: "PT2H15M")
     final durationStr = itinerary['duration'] as String;
@@ -87,7 +97,20 @@ class FlightOffer {
       arriveHourLocal: arriveHourLocal,
       departMinuteLocal: departMinuteLocal,
       arriveMinuteLocal: arriveMinuteLocal,
+      departTimezoneOffset: departTzOffset,
+      arriveTimezoneOffset: arriveTzOffset,
     );
+  }
+
+  /// Extract timezone offset from ISO 8601 timestamp
+  /// Example: "2025-11-15T07:35:00-05:00" -> "-05:00"
+  static String? _extractTimezoneOffset(String isoTimestamp) {
+    // ISO 8601 format: YYYY-MM-DDTHH:MM:SS±HH:MM
+    // Offset starts at position 19
+    if (isoTimestamp.length >= 25) {
+      return isoTimestamp.substring(19); // e.g., "-05:00" or "+01:00"
+    }
+    return null;
   }
 
   static int _parseDuration(String duration) {

@@ -298,11 +298,13 @@ class DuffelService {
       final departTime = DateTime.parse(departingAt);
       final departHourLocal = int.parse(departingAt.substring(11, 13));
       final departMinuteLocal = int.parse(departingAt.substring(14, 16));
+      final departTzOffset = _extractTimezoneOffset(departingAt);
 
       final arrivingAt = lastSegment['arriving_at'] as String;
       final arriveTime = DateTime.parse(arrivingAt);
       final arriveHourLocal = int.parse(arrivingAt.substring(11, 13));
       final arriveMinuteLocal = int.parse(arrivingAt.substring(14, 16));
+      final arriveTzOffset = _extractTimezoneOffset(arrivingAt);
 
       print('       📋 $label: departing_at="$departingAt" → parsed time=$departTime, hour=$departHourLocal');
       print('       📋 $label: arriving_at="$arrivingAt" → parsed time=$arriveTime, hour=$arriveHourLocal');
@@ -340,6 +342,8 @@ class DuffelService {
         arriveHourLocal: arriveHourLocal,
         departMinuteLocal: departMinuteLocal,
         arriveMinuteLocal: arriveMinuteLocal,
+        departTimezoneOffset: departTzOffset,
+        arriveTimezoneOffset: arriveTzOffset,
       );
     } catch (e) {
       print('    ⚠️ Error parsing slice: $e');
@@ -549,6 +553,17 @@ class DuffelService {
   /// Format time as "HH:MM"
   String formatTime(DateTime time) {
     return '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
+  }
+
+  /// Extract timezone offset from ISO 8601 timestamp
+  /// Example: "2025-11-15T07:35:00-05:00" -> "-05:00"
+  String? _extractTimezoneOffset(String isoTimestamp) {
+    // ISO 8601 format: YYYY-MM-DDTHH:MM:SS±HH:MM
+    // Offset starts at position 19
+    if (isoTimestamp.length >= 25) {
+      return isoTimestamp.substring(19); // e.g., "-05:00" or "+01:00"
+    }
+    return null;
   }
 
   /// WEB ONLY: Search via Firebase Cloud Function (avoids CORS issues)
