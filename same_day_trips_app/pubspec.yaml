@@ -63,6 +63,13 @@ dependencies:
   excel: ^4.0.2
   path_provider: ^2.1.2
 
+  # PDF generation and printing
+  printing: ^5.14.2
+  pdf: ^3.11.3
+
+  # Sharing
+  share_plus: ^12.0.1
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
