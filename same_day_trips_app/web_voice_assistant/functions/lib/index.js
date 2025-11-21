@@ -36,7 +36,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.duffelProxy = exports.flightawareProxy = void 0;
+exports.createDuffelLink = exports.duffelProxy = exports.flightawareProxy = void 0;
 const functions = __importStar(require("firebase-functions"));
 const cors_1 = __importDefault(require("cors"));
 const dotenv = __importStar(require("dotenv"));
@@ -123,7 +123,7 @@ exports.duffelProxy = functions.https.onRequest((req, res) => {
                 return;
             }
             // Get parameters from request body
-            const { origin, destination, date, earliestDepartHour = 5, departByHour = 9, returnAfterHour = 15, returnByHour = 19, minDurationMinutes = 50, maxDurationMinutes = 240, } = req.body;
+            const { origin, destination, date, earliestDepartHour = 5, departByHour = 9, returnAfterHour = 15, returnByHour = 19, minDurationMinutes = 50, maxDurationMinutes = 240, allowedCarriers = [], } = req.body;
             if (!origin || !destination) {
                 res.status(400).json({
                     error: 'Origin and destination are required',
@@ -144,6 +144,12 @@ exports.duffelProxy = functions.https.onRequest((req, res) => {
             const departTo = `${departByHour.toString().padStart(2, '0')}:00`;
             const returnFrom = `${returnAfterHour.toString().padStart(2, '0')}:00`;
             const returnTo = `${returnByHour.toString().padStart(2, '0')}:00`;
+            // Normalize carrier filters to uppercase for matching
+            const allowedCarrierSet = Array.isArray(allowedCarriers)
+                ? allowedCarriers
+                    .map((c) => (c || '').toUpperCase())
+                    .filter((c) => c.length > 0)
+                : [];
             // Call Duffel API for round-trip search
             const apiUrl = 'https://api.duffel.com/air/offer_requests';
             const response = await fetch(apiUrl, {
@@ -223,6 +229,16 @@ exports.duffelProxy = functions.https.onRequest((req, res) => {
                 }
                 if (!outbound || !returnFlight)
                     continue;
+                // Filter airlines if provided
+                const matchesAllowed = (carriers) => {
+                    if (allowedCarrierSet.length === 0)
+                        return true;
+                    return carriers.some((c) => allowedCarrierSet.includes(c));
+                };
+                if (!matchesAllowed(outbound.carriers) ||
+                    !matchesAllowed(returnFlight.carriers)) {
+                    continue;
+                }
                 // Enforce home arrival window with minute precision (latest is inclusive of :00 only)
                 const returnArrive = new Date(returnFlight.arriveTime);
                 const arriveHour = returnArrive.getHours();
@@ -277,6 +293,82 @@ exports.duffelProxy = functions.https.onRequest((req, res) => {
     });
 });
 /**
+ * Create a Duffel checkout link (keeps secret key on the server)
+ */
+exports.createDuffelLink = functions.https.onRequest((req, res) => {
+    corsHandler(req, res, async () => {
+        var _a;
+        try {
+            if (req.method !== 'POST') {
+                res.status(405).json({ error: 'Method not allowed' });
+                return;
+            }
+            const { offerId, email, phoneNumber, givenName, familyName, } = req.body;
+            if (!offerId) {
+                res.status(400).json({ error: 'offerId is required' });
+                return;
+            }
+            const DUFFEL_ACCESS_TOKEN = process.env.DUFFEL_ACCESS_TOKEN || '';
+            if (!DUFFEL_ACCESS_TOKEN) {
+                res.status(500).json({
+                    error: 'Duffel API token not configured',
+                    details: 'Please set DUFFEL_ACCESS_TOKEN in .env file',
+                });
+                return;
+            }
+            const apiUrl = 'https://api.duffel.com/air/links';
+            const passengers = [];
+            if (email || phoneNumber || givenName || familyName) {
+                passengers.push({
+                    type: 'adult',
+                    email,
+                    phone_number: phoneNumber,
+                    given_name: givenName,
+                    family_name: familyName,
+                });
+            }
+            const body = {
+                data: {
+                    offers: [offerId],
+                },
+            };
+            if (passengers.length > 0) {
+                body.data.passengers = passengers;
+            }
+            const response = await fetch(apiUrl, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${DUFFEL_ACCESS_TOKEN}`,
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                    'Accept-Encoding': 'gzip',
+                    'Duffel-Version': 'v2',
+                },
+                body: JSON.stringify(body),
+            });
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('Duffel link API error:', response.status, errorText);
+                res.status(response.status).json({
+                    error: 'Duffel link API error',
+                    details: errorText,
+                });
+                return;
+            }
+            const data = await response.json();
+            const linkUrl = ((_a = data === null || data === void 0 ? void 0 : data.data) === null || _a === void 0 ? void 0 : _a.url) || (data === null || data === void 0 ? void 0 : data.url) || null;
+            res.status(200).json({ linkUrl });
+        }
+        catch (error) {
+            console.error('Error creating Duffel link:', error);
+            res.status(500).json({
+                error: 'Internal server error',
+                message: error.message,
+            });
+        }
+    });
+});
+/**
  * Helper function to parse a Duffel slice into our flight format
  */
 function parseSlice(slice) {
@@ -307,12 +399,26 @@ function parseSlice(slice) {
         })
             .join(', ');
         const numStops = segments.length - 1;
+        const carriers = segments
+            .map((seg) => {
+            const operating = seg.operating_carrier;
+            const marketing = seg.marketing_carrier;
+            return ((operating === null || operating === void 0 ? void 0 : operating.iata_code) || (marketing === null || marketing === void 0 ? void 0 : marketing.iata_code) || '').toUpperCase();
+        })
+            .filter((c) => c.length > 0);
+        // Extract timezone offsets from ISO timestamps
+        const departTzOffset = extractTimezoneOffset(departingAt);
+        const arriveTzOffset = extractTimezoneOffset(arrivingAt);
         return {
             departTime: departTime.toISOString(),
             arriveTime: arriveTime.toISOString(),
             durationMinutes,
             flightNumbers,
             numStops,
+            carriers,
+            carrier: carriers[0] || null,
+            departTimezoneOffset: departTzOffset,
+            arriveTimezoneOffset: arriveTzOffset,
         };
     }
     catch (e) {
@@ -392,6 +498,18 @@ function generateAirlineUrl(airlineCode, origin, dest, date) {
         return `https://jetblue.com/booking/flights?from=${origin}&to=${dest}&depart=${date}&return=${date}&isMultiCity=false&noOfRoute=1&lang=en&adults=1`;
     }
     // For other airlines, return null (will use Google Flights/Kayak)
+    return null;
+}
+/**
+ * Extract timezone offset from ISO 8601 timestamp
+ * Example: "2025-11-15T07:35:00-05:00" -> "-05:00"
+ */
+function extractTimezoneOffset(isoTimestamp) {
+    // ISO 8601 format: YYYY-MM-DDTHH:MM:SS±HH:MM
+    // Offset starts at position 19
+    if (isoTimestamp && isoTimestamp.length >= 25) {
+        return isoTimestamp.substring(19); // e.g., "-05:00" or "+01:00"
+    }
     return null;
 }
 //# sourceMappingURL=index.js.map

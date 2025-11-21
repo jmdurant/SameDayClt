@@ -40,6 +40,7 @@ class DuffelService {
     int minDurationMinutes = 50,
     int maxDurationMinutes = 240,
     int maxConnections = 1,
+    List<String>? allowedCarriers,
   }) async {
     // PLATFORM DETECTION: Use Cloud Function on web, direct API on mobile
     if (kIsWeb) {
@@ -54,6 +55,7 @@ class DuffelService {
         returnByHour: returnByHour,
         minDurationMinutes: minDurationMinutes,
         maxDurationMinutes: maxDurationMinutes,
+        allowedCarriers: allowedCarriers,
       );
     }
 
@@ -149,6 +151,7 @@ class DuffelService {
           maxDurationMinutes,
           returnAfterHour,
           returnByHour,
+          allowedCarriers,
         );
         if (parsed != null) {
           trips.add(parsed);
@@ -196,6 +199,7 @@ class DuffelService {
     int maxDurationMinutes,
     int returnAfterHour,
     int returnByHour,
+    List<String>? allowedCarriers,
   ) {
     try {
       final slices = offer['slices'] as List;
@@ -235,6 +239,15 @@ class DuffelService {
       print('          Return departTime: ${returnFlight?.departTime}');
 
       if (outbound == null || returnFlight == null) return null;
+
+      // Filter by allowed carriers
+      if (allowedCarriers != null && allowedCarriers.isNotEmpty) {
+        bool matches(List<String> carriers) =>
+            carriers.any((c) => allowedCarriers.contains(c.toUpperCase()));
+        if (!matches(outbound.carriers) || !matches(returnFlight.carriers)) {
+          return null;
+        }
+      }
 
       // CALCULATE GROUND TIME to debug the issue
       final groundTimeSeconds = returnFlight.departTime.difference(outbound.arriveTime).inSeconds;
@@ -327,6 +340,17 @@ class DuffelService {
           })
           .join(', ');
 
+      final carriers = segments
+          .map((seg) {
+            final operating = seg['operating_carrier'] as Map<String, dynamic>?;
+            final marketing = seg['marketing_carrier'] as Map<String, dynamic>?;
+            return (operating?['iata_code'] ?? marketing?['iata_code'] ?? '??') as String;
+          })
+          .where((c) => c.isNotEmpty)
+          .map((c) => c.toUpperCase())
+          .toSet()
+          .toList();
+
       final numStops = segments.length - 1;
 
       // Note: Price is at offer level, not slice level
@@ -338,6 +362,7 @@ class DuffelService {
         flightNumbers: flightNumbers,
         numStops: numStops,
         price: 0.0, // Will be set from round-trip total
+        carriers: carriers,
         departHourLocal: departHourLocal,
         arriveHourLocal: arriveHourLocal,
         departMinuteLocal: departMinuteLocal,
@@ -448,6 +473,17 @@ class DuffelService {
           })
           .join(', ');
 
+      final carriers = segments
+          .map((seg) {
+            final operating = seg['operating_carrier'] as Map<String, dynamic>?;
+            final marketing = seg['marketing_carrier'] as Map<String, dynamic>?;
+            return (operating?['iata_code'] ?? marketing?['iata_code'] ?? '??') as String;
+          })
+          .where((c) => c.isNotEmpty)
+          .map((c) => c.toUpperCase())
+          .toSet()
+          .toList();
+
       // Number of stops (segments - 1)
       final numStops = segments.length - 1;
 
@@ -462,6 +498,7 @@ class DuffelService {
         flightNumbers: flightNumbers,
         numStops: numStops,
         price: price,
+        carriers: carriers,
         departHourLocal: departHourLocal,
         arriveHourLocal: arriveHourLocal,
         departMinuteLocal: departMinuteLocal,
@@ -577,6 +614,7 @@ class DuffelService {
     required int returnByHour,
     int minDurationMinutes = 50,
     int maxDurationMinutes = 240,
+    List<String>? allowedCarriers,
   }) async {
     try {
       const functionUrl = 'https://us-central1-samedaytrips.cloudfunctions.net/duffelProxy';
@@ -594,6 +632,7 @@ class DuffelService {
           'returnByHour': returnByHour,
           'minDurationMinutes': minDurationMinutes,
           'maxDurationMinutes': maxDurationMinutes,
+          'allowedCarriers': allowedCarriers,
         },
       );
 
@@ -625,7 +664,21 @@ class DuffelService {
         final withinMax = outboundDuration <= maxDurationMinutes &&
             returnDuration <= maxDurationMinutes;
 
-        return meetsMin && withinMax;
+        bool matchesCarrier(List<dynamic>? carriers) {
+          if (allowedCarriers == null || allowedCarriers.isEmpty) return true;
+          final codes = carriers
+                  ?.map((c) => c.toString().toUpperCase())
+                  .where((c) => c.isNotEmpty)
+                  .toList() ??
+              [];
+          return codes.any((c) => allowedCarriers.contains(c));
+        }
+
+        final outboundCarriers = outbound['carriers'] as List<dynamic>?;
+        final returnCarriers = returnFlight['carriers'] as List<dynamic>?;
+        final carriersOk = matchesCarrier(outboundCarriers) && matchesCarrier(returnCarriers);
+
+        return meetsMin && withinMax && carriersOk;
       }).toList();
 
       if (filteredTrips.isEmpty) {
@@ -637,6 +690,12 @@ class DuffelService {
       final parsedTrips = filteredTrips.map((trip) {
         final outbound = trip['outbound'] as Map<String, dynamic>;
         final returnFlight = trip['returnFlight'] as Map<String, dynamic>;
+        final outboundCarriers = (outbound['carriers'] as List<dynamic>? ?? [])
+            .map((c) => c.toString())
+            .toList();
+        final returnCarriers = (returnFlight['carriers'] as List<dynamic>? ?? [])
+            .map((c) => c.toString())
+            .toList();
 
         return RoundTripOffer(
           outbound: FlightOffer(
@@ -646,6 +705,7 @@ class DuffelService {
             flightNumbers: outbound['flightNumbers'] as String,
             numStops: outbound['numStops'] as int,
             price: (trip['totalPrice'] as num).toDouble() / 2, // Split price
+            carriers: outboundCarriers,
             departHourLocal: DateTime.parse(outbound['departTime']).hour,
             arriveHourLocal: DateTime.parse(outbound['arriveTime']).hour,
             departMinuteLocal: DateTime.parse(outbound['departTime']).minute,
@@ -658,6 +718,7 @@ class DuffelService {
             flightNumbers: returnFlight['flightNumbers'] as String,
             numStops: returnFlight['numStops'] as int,
             price: (trip['totalPrice'] as num).toDouble() / 2, // Split price
+            carriers: returnCarriers,
             departHourLocal: DateTime.parse(returnFlight['departTime']).hour,
             arriveHourLocal: DateTime.parse(returnFlight['arriveTime']).hour,
             departMinuteLocal: DateTime.parse(returnFlight['departTime']).minute,
@@ -675,6 +736,46 @@ class DuffelService {
       );
     } catch (e) {
       print('  ❌ Cloud Function call failed: $e');
+      if (e is DioException && e.response != null) {
+        print('  Response: ${e.response?.data}');
+      }
+      return null;
+    }
+  }
+
+  /// Create a Duffel checkout link via Cloud Function so secrets stay server-side
+  Future<String?> createDuffelLink({
+    required String offerId,
+    String? email,
+    String? phoneNumber,
+    String? givenName,
+    String? familyName,
+  }) async {
+    try {
+      const functionUrl = 'https://createduffellink-yz6dw3fkaa-uc.a.run.app';
+      final dio = Dio();
+
+      final response = await dio.post(functionUrl, data: {
+        'offerId': offerId,
+        if (email != null) 'email': email,
+        if (phoneNumber != null) 'phoneNumber': phoneNumber,
+        if (givenName != null) 'givenName': givenName,
+        if (familyName != null) 'familyName': familyName,
+      });
+
+      if (response.statusCode != 200) {
+        print('  ? Duffel link error: ${response.statusCode}');
+        return null;
+      }
+
+      final data = response.data as Map<String, dynamic>;
+      final linkUrl = data['linkUrl'] as String?
+          ?? data['url'] as String?
+          ?? data['link'] as String?
+          ?? data['data']?['url'] as String?;
+      return linkUrl;
+    } catch (e) {
+      print('  ? Failed to create Duffel link: $e');
       if (e is DioException && e.response != null) {
         print('  Response: ${e.response?.data}');
       }

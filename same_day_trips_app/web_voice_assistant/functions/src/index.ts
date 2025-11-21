@@ -106,6 +106,7 @@ export const duffelProxy = functions.https.onRequest(
           returnByHour = 19,
           minDurationMinutes = 50,
           maxDurationMinutes = 240,
+          allowedCarriers = [],
         } = req.body;
 
         if (!origin || !destination) {
@@ -131,6 +132,13 @@ export const duffelProxy = functions.https.onRequest(
         const departTo = `${departByHour.toString().padStart(2, '0')}:00`;
         const returnFrom = `${returnAfterHour.toString().padStart(2, '0')}:00`;
         const returnTo = `${returnByHour.toString().padStart(2, '0')}:00`;
+
+        // Normalize carrier filters to uppercase for matching
+        const allowedCarrierSet = Array.isArray(allowedCarriers)
+          ? allowedCarriers
+              .map((c: string) => (c || '').toUpperCase())
+              .filter((c: string) => c.length > 0)
+          : [];
 
         // Call Duffel API for round-trip search
         const apiUrl = 'https://api.duffel.com/air/offer_requests';
@@ -219,6 +227,16 @@ export const duffelProxy = functions.https.onRequest(
 
           if (!outbound || !returnFlight) continue;
 
+          // Filter airlines if provided
+          const matchesAllowed = (carriers: string[]) => {
+            if (allowedCarrierSet.length === 0) return true;
+            return carriers.some((c) => allowedCarrierSet.includes(c));
+          };
+          if (!matchesAllowed(outbound.carriers) ||
+              !matchesAllowed(returnFlight.carriers)) {
+            continue;
+          }
+
           // Enforce home arrival window with minute precision (latest is inclusive of :00 only)
           const returnArrive = new Date(returnFlight.arriveTime);
           const arriveHour = returnArrive.getHours();
@@ -300,6 +318,97 @@ export const duffelProxy = functions.https.onRequest(
 );
 
 /**
+ * Create a Duffel checkout link (keeps secret key on the server)
+ */
+export const createDuffelLink = functions.https.onRequest(
+  (req: Request, res: Response) => {
+    corsHandler(req, res, async () => {
+      try {
+        if (req.method !== 'POST') {
+          res.status(405).json({error: 'Method not allowed'});
+          return;
+        }
+
+        const {
+          offerId,
+          email,
+          phoneNumber,
+          givenName,
+          familyName,
+        } = req.body;
+
+        if (!offerId) {
+          res.status(400).json({error: 'offerId is required'});
+          return;
+        }
+
+        const DUFFEL_ACCESS_TOKEN = process.env.DUFFEL_ACCESS_TOKEN || '';
+        if (!DUFFEL_ACCESS_TOKEN) {
+          res.status(500).json({
+            error: 'Duffel API token not configured',
+            details: 'Please set DUFFEL_ACCESS_TOKEN in .env file',
+          });
+          return;
+        }
+
+        const apiUrl = 'https://api.duffel.com/air/links';
+        const passengers: any[] = [];
+        if (email || phoneNumber || givenName || familyName) {
+          passengers.push({
+            type: 'adult',
+            email,
+            phone_number: phoneNumber,
+            given_name: givenName,
+            family_name: familyName,
+          });
+        }
+
+        const body: any = {
+          data: {
+            offers: [offerId],
+          },
+        };
+        if (passengers.length > 0) {
+          body.data.passengers = passengers;
+        }
+
+        const response = await fetch(apiUrl, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${DUFFEL_ACCESS_TOKEN}`,
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+            'Accept-Encoding': 'gzip',
+            'Duffel-Version': 'v2',
+          },
+          body: JSON.stringify(body),
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('Duffel link API error:', response.status, errorText);
+          res.status(response.status).json({
+            error: 'Duffel link API error',
+            details: errorText,
+          });
+          return;
+        }
+
+        const data = await response.json();
+        const linkUrl = data?.data?.url || data?.url || null;
+        res.status(200).json({linkUrl});
+      } catch (error: any) {
+        console.error('Error creating Duffel link:', error);
+        res.status(500).json({
+          error: 'Internal server error',
+          message: error.message,
+        });
+      }
+    });
+  }
+);
+
+/**
  * Helper function to parse a Duffel slice into our flight format
  */
 function parseSlice(slice: any) {
@@ -336,6 +445,14 @@ function parseSlice(slice: any) {
 
     const numStops = segments.length - 1;
 
+    const carriers = segments
+      .map((seg: any) => {
+        const operating = seg.operating_carrier;
+        const marketing = seg.marketing_carrier;
+        return (operating?.iata_code || marketing?.iata_code || '').toUpperCase();
+      })
+      .filter((c: string) => c.length > 0);
+
     // Extract timezone offsets from ISO timestamps
     const departTzOffset = extractTimezoneOffset(departingAt);
     const arriveTzOffset = extractTimezoneOffset(arrivingAt);
@@ -346,6 +463,8 @@ function parseSlice(slice: any) {
       durationMinutes,
       flightNumbers,
       numStops,
+      carriers,
+      carrier: carriers[0] || null,
       departTimezoneOffset: departTzOffset,
       arriveTimezoneOffset: arriveTzOffset,
     };

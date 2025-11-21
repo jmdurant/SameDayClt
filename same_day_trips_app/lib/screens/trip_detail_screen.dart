@@ -1,7 +1,12 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:device_calendar/device_calendar.dart';
 import 'package:intl/intl.dart';
+import 'package:printing/printing.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:share_plus/share_plus.dart';
 import '../models/trip.dart';
 import '../models/stop.dart';
 import '../utils/time_formatter.dart';
@@ -11,6 +16,7 @@ import 'arrival_assistant_screen.dart';
 import 'voice_assistant_screen.dart';
 import '../car/car_controller.dart';
 import '../theme/app_colors.dart';
+import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 
 class TripDetailScreen extends StatefulWidget {
   final Trip trip;
@@ -44,6 +50,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
     }
   }
 
+
   Future<void> _addStop() async {
     final result = await showDialog<Stop>(
       context: context,
@@ -56,6 +63,68 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
       });
       CarController().updateAgenda(widget.trip, _stops);
     }
+  }
+
+  String? _extractCarrierCode(String flightNumbers) {
+    final first = flightNumbers.split(',').first.trim();
+    final match = RegExp(r'([A-Z]{2})\\d').firstMatch(first);
+    return match != null ? match.group(1) : null;
+  }
+
+  String? _buildAirlineBookingUrl() {
+    final code = _extractCarrierCode(widget.trip.outboundFlight);
+    if (code == null) return null;
+
+    final origin = widget.trip.origin;
+    final dest = widget.trip.destination;
+    final date = widget.trip.date; // expected yyyy-MM-dd
+
+    switch (code) {
+      case 'AA':
+        return 'https://www.aa.com/flights/$origin-$dest/$date/$date/1/0/0/ECONOMY/true';
+      case 'DL':
+        return 'https://www.delta.com/flight-search/book-a-flight?tripType=ROUND_TRIP&departureDate=$date&returnDate=$date&originCode=$origin&destinationCode=$dest&paxCount=1';
+      case 'UA':
+        return 'https://www.united.com/en/us/fsr/choose-flights?f=$origin&t=$dest&d=$date&r=$date&px=1&taxng=1&idx=1';
+      case 'WN':
+        return 'https://www.southwest.com/air/booking/select.html?originationAirportCode=$origin&destinationAirportCode=$dest&departureDate=$date&returnDate=$date&adultPassengersCount=1';
+      case 'B6':
+        return 'https://jetblue.com/booking/flights?from=$origin&to=$dest&depart=$date&return=$date&isMultiCity=false&noOfRoute=1&lang=en&adults=1';
+      case 'AS':
+        return 'https://www.alaskaair.com/planbook/shopping?trip=roundtrip&awardBooking=false&adultCount=1&from=$origin&to=$dest&departureDate=$date&returnDate=$date';
+      case 'NK':
+        return 'https://www.spirit.com/book/flights?journey=roundTrip&origin=$origin&destination=$dest&departDate=$date&returnDate=$date&ADT=1';
+      case 'F9':
+        return 'https://booking.flyfrontier.com/Flight/Search?trip=roundtrip&from=$origin&to=$dest&departDate=$date&returnDate=$date&adults=1';
+      default:
+        return null;
+    }
+  }
+
+  String _airlineNameForCode(String code) {
+    const names = {
+      'AA': 'American',
+      'DL': 'Delta',
+      'UA': 'United',
+      'WN': 'Southwest',
+      'B6': 'JetBlue',
+      'AS': 'Alaska',
+      'NK': 'Spirit',
+      'F9': 'Frontier',
+    };
+    return names[code] ?? code;
+  }
+
+  void _openAirlineWebView(String url, {String? title}) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AirlineCheckoutScreen(
+          url: url,
+          title: title ?? 'Airline Checkout',
+        ),
+      ),
+    );
   }
 
   Future<void> _loadCalendarStops() async {
@@ -153,10 +222,484 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
   }
 
   RouteTimeline? _plannedRoute;
+  AgendaTimeline? _agenda;
   bool _isPlanningRoute = false;
   String? _routeError;
   bool _isLoadingCalendar = false;
   String? _calendarError;
+
+  Future<void> _printAgenda() async {
+    if (_agenda == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please plan the day first before printing')),
+      );
+      return;
+    }
+
+    await Printing.layoutPdf(
+      onLayout: (PdfPageFormat format) async => _generateAgendaPdf(format),
+    );
+  }
+
+  Future<void> _shareAgenda() async {
+    if (_agenda == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please plan the day first before sharing')),
+      );
+      return;
+    }
+
+    // Generate text format of the agenda
+    final buffer = StringBuffer();
+
+    // Header
+    buffer.writeln('🗓️ SAME-DAY TRIP TO ${widget.trip.city.toUpperCase()}');
+    buffer.writeln('📍 ${widget.trip.destination} • ${widget.trip.date}');
+    buffer.writeln('');
+
+    // Outbound Flight
+    buffer.writeln('✈️ OUTBOUND FLIGHT');
+    buffer.writeln('${widget.trip.outboundFlight}');
+    buffer.writeln('Depart: ${widget.trip.departOrigin}');
+    buffer.writeln('Arrive: ${widget.trip.arriveDestination}');
+    buffer.writeln('Duration: ${widget.trip.outboundDuration} • ${widget.trip.outboundStops == 0 ? 'Nonstop' : '${widget.trip.outboundStops} stop(s)'}');
+    buffer.writeln('Cost: \$${widget.trip.outboundPrice.toStringAsFixed(2)}');
+    buffer.writeln('');
+
+    // Day Plan
+    buffer.writeln('📋 DAY PLAN');
+    buffer.writeln('${DateFormat('h:mm a').format(_agenda!.arrivalTime)} - Arrive in ${widget.trip.city}');
+    buffer.writeln('${DateFormat('h:mm a').format(_agenda!.startTime)} - Exit airport (+${_agenda!.airportExitMinutes} min)');
+    buffer.writeln('');
+
+    // Agenda items
+    for (final item in _agenda!.items) {
+      final time = DateFormat('h:mm a').format(item.time);
+      if (item.type == AgendaItemType.travel) {
+        final distance = item.distanceMiles != null ? ' • ${item.distanceMiles!.toStringAsFixed(1)} mi' : '';
+        buffer.writeln('$time - 🚗 ${item.description} (${item.durationMinutes} min$distance)');
+      } else if (item.type == AgendaItemType.stop) {
+        buffer.writeln('$time - 📍 ${item.description} (${item.durationMinutes} min)');
+      }
+    }
+
+    buffer.writeln('');
+    buffer.writeln('${DateFormat('h:mm a').format(_agenda!.endTime)} - Must be at airport (-${_agenda!.airportBufferMinutes} min)');
+    buffer.writeln('${DateFormat('h:mm a').format(_agenda!.departureTime)} - Depart ${widget.trip.city}');
+    buffer.writeln('');
+
+    // Driving Summary
+    if (_plannedRoute != null) {
+      buffer.writeln('🚗 TOTAL DRIVING: ${_plannedRoute!.totalDrivingMiles.toStringAsFixed(1)} miles');
+      buffer.writeln('');
+    }
+
+    // Return Flight
+    buffer.writeln('✈️ RETURN FLIGHT');
+    buffer.writeln('${widget.trip.returnFlight}');
+    buffer.writeln('Depart: ${widget.trip.departDestination}');
+    buffer.writeln('Arrive: ${widget.trip.arriveOrigin}');
+    buffer.writeln('Duration: ${widget.trip.returnDuration} • ${widget.trip.returnStops == 0 ? 'Nonstop' : '${widget.trip.returnStops} stop(s)'}');
+    buffer.writeln('Cost: \$${widget.trip.returnPrice.toStringAsFixed(2)}');
+    buffer.writeln('');
+
+    // Cost Summary
+    buffer.writeln('💰 TOTAL EXPENSES');
+    buffer.writeln('Flights: \$${widget.trip.totalFlightCost.toStringAsFixed(2)}');
+    if (_plannedRoute != null) {
+      final mileageCost = _plannedRoute!.totalDrivingMiles * 0.70;
+      buffer.writeln('Mileage (${_plannedRoute!.totalDrivingMiles.toStringAsFixed(1)} mi @ \$0.70/mi): \$${mileageCost.toStringAsFixed(2)}');
+      buffer.writeln('TOTAL: \$${(widget.trip.totalFlightCost + mileageCost).toStringAsFixed(2)}');
+    } else {
+      buffer.writeln('TOTAL: \$${widget.trip.totalFlightCost.toStringAsFixed(2)}');
+    }
+    buffer.writeln('');
+
+    // Status
+    buffer.writeln(_agenda!.isFeasible ? '✅ ${_agenda!.remainingTimeMessage}' : '⚠️ ${_agenda!.remainingTimeMessage}');
+
+    // Share the text
+    await Share.share(
+      buffer.toString(),
+      subject: 'Same-Day Trip to ${widget.trip.city}',
+    );
+  }
+
+  Future<Uint8List> _generateAgendaPdf(PdfPageFormat format) async {
+    final pdf = pw.Document();
+
+    pdf.addPage(
+      pw.Page(
+        pageFormat: format,
+        build: (pw.Context context) {
+          return pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              // Header
+              pw.Container(
+                padding: const pw.EdgeInsets.all(20),
+                decoration: pw.BoxDecoration(
+                  color: PdfColors.blue900,
+                  borderRadius: pw.BorderRadius.circular(8),
+                ),
+                child: pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    pw.Text(
+                      'Same-Day Trip Expense Report',
+                      style: pw.TextStyle(
+                        fontSize: 24,
+                        fontWeight: pw.FontWeight.bold,
+                        color: PdfColors.white,
+                      ),
+                    ),
+                    pw.SizedBox(height: 8),
+                    pw.Text(
+                      '${widget.trip.city} (${widget.trip.destination})',
+                      style: pw.TextStyle(
+                        fontSize: 18,
+                        color: PdfColors.white,
+                      ),
+                    ),
+                    pw.Text(
+                      'Date: ${widget.trip.date}',
+                      style: const pw.TextStyle(
+                        fontSize: 14,
+                        color: PdfColors.white,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              pw.SizedBox(height: 20),
+
+              // Outbound Flight
+              _buildFlightSection(
+                'Outbound Flight',
+                widget.trip.outboundFlight,
+                widget.trip.departOrigin,
+                widget.trip.arriveDestination,
+                widget.trip.outboundDuration,
+                widget.trip.outboundStops,
+                widget.trip.outboundPrice,
+              ),
+              pw.SizedBox(height: 16),
+
+              // Agenda Timeline
+              pw.Text(
+                'Day Plan & Itinerary',
+                style: pw.TextStyle(
+                  fontSize: 18,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+              ),
+              pw.SizedBox(height: 8),
+              pw.Container(
+                decoration: pw.BoxDecoration(
+                  border: pw.Border.all(color: PdfColors.grey400),
+                  borderRadius: pw.BorderRadius.circular(8),
+                ),
+                padding: const pw.EdgeInsets.all(12),
+                child: pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    // Arrival
+                    _buildAgendaRow(
+                      DateFormat('h:mm a').format(_agenda!.arrivalTime),
+                      'Arrive in ${widget.trip.city}',
+                      null,
+                      null,
+                      true,
+                    ),
+                    _buildAgendaRow(
+                      DateFormat('h:mm a').format(_agenda!.startTime),
+                      'Exit airport (+${_agenda!.airportExitMinutes} min)',
+                      null,
+                      null,
+                      false,
+                    ),
+                    pw.Divider(),
+
+                    // Agenda items
+                    ..._agenda!.items.map((item) => _buildAgendaRow(
+                      DateFormat('h:mm a').format(item.time),
+                      item.description,
+                      item.durationMinutes,
+                      item.distanceMiles,
+                      item.type == AgendaItemType.stop,
+                    )),
+                    pw.Divider(),
+
+                    // Return to airport
+                    _buildAgendaRow(
+                      DateFormat('h:mm a').format(_agenda!.endTime),
+                      'Must be at airport (-${_agenda!.airportBufferMinutes} min)',
+                      null,
+                      null,
+                      false,
+                    ),
+                    _buildAgendaRow(
+                      DateFormat('h:mm a').format(_agenda!.departureTime),
+                      'Depart ${widget.trip.city}',
+                      null,
+                      null,
+                      true,
+                    ),
+                  ],
+                ),
+              ),
+              pw.SizedBox(height: 16),
+
+              // Total driving miles summary
+              if (_plannedRoute != null)
+                pw.Container(
+                  padding: const pw.EdgeInsets.all(12),
+                  decoration: pw.BoxDecoration(
+                    color: PdfColors.blue50,
+                    border: pw.Border.all(color: PdfColors.blue200),
+                    borderRadius: pw.BorderRadius.circular(8),
+                  ),
+                  child: pw.Row(
+                    mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                    children: [
+                      pw.Text(
+                        'Total Driving Distance:',
+                        style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                      ),
+                      pw.Text(
+                        '${_plannedRoute!.totalDrivingMiles.toStringAsFixed(1)} miles',
+                        style: pw.TextStyle(
+                          fontWeight: pw.FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              pw.SizedBox(height: 16),
+
+              // Return Flight
+              _buildFlightSection(
+                'Return Flight',
+                widget.trip.returnFlight,
+                widget.trip.departDestination,
+                widget.trip.arriveOrigin,
+                widget.trip.returnDuration,
+                widget.trip.returnStops,
+                widget.trip.returnPrice,
+              ),
+              pw.SizedBox(height: 20),
+
+              // Cost Summary
+              pw.Container(
+                padding: const pw.EdgeInsets.all(16),
+                decoration: pw.BoxDecoration(
+                  color: PdfColors.grey200,
+                  borderRadius: pw.BorderRadius.circular(8),
+                ),
+                child: pw.Column(
+                  children: [
+                    pw.Row(
+                      mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                      children: [
+                        pw.Text('Outbound Flight:'),
+                        pw.Text('\$${widget.trip.outboundPrice.toStringAsFixed(2)}'),
+                      ],
+                    ),
+                    pw.SizedBox(height: 4),
+                    pw.Row(
+                      mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                      children: [
+                        pw.Text('Return Flight:'),
+                        pw.Text('\$${widget.trip.returnPrice.toStringAsFixed(2)}'),
+                      ],
+                    ),
+                    if (_plannedRoute != null) ...[
+                      pw.SizedBox(height: 4),
+                      pw.Row(
+                        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                        children: [
+                          pw.Text('Mileage (${_plannedRoute!.totalDrivingMiles.toStringAsFixed(1)} mi @ \$0.70/mi):'),
+                          pw.Text('\$${(_plannedRoute!.totalDrivingMiles * 0.70).toStringAsFixed(2)}'),
+                        ],
+                      ),
+                    ],
+                    pw.Divider(),
+                    pw.Row(
+                      mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                      children: [
+                        pw.Text(
+                          'Total Expense:',
+                          style: pw.TextStyle(
+                            fontWeight: pw.FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
+                        pw.Text(
+                          _plannedRoute != null
+                              ? '\$${(widget.trip.totalFlightCost + (_plannedRoute!.totalDrivingMiles * 0.70)).toStringAsFixed(2)}'
+                              : '\$${widget.trip.totalFlightCost.toStringAsFixed(2)}',
+                          style: pw.TextStyle(
+                            fontWeight: pw.FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              pw.SizedBox(height: 20),
+
+              // Footer
+              pw.Text(
+                'Generated on ${DateFormat('MMMM d, y \'at\' h:mm a').format(DateTime.now())}',
+                style: const pw.TextStyle(
+                  fontSize: 10,
+                  color: PdfColors.grey600,
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+
+    return pdf.save();
+  }
+
+  pw.Widget _buildFlightSection(
+    String title,
+    String flightNumber,
+    String departure,
+    String arrival,
+    String duration,
+    int stops,
+    double price,
+  ) {
+    return pw.Container(
+      padding: const pw.EdgeInsets.all(12),
+      decoration: pw.BoxDecoration(
+        border: pw.Border.all(color: PdfColors.grey400),
+        borderRadius: pw.BorderRadius.circular(8),
+      ),
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              pw.Text(
+                title,
+                style: pw.TextStyle(
+                  fontSize: 16,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+              ),
+              pw.Text(
+                '\$${price.toStringAsFixed(2)}',
+                style: pw.TextStyle(
+                  fontSize: 16,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+          pw.SizedBox(height: 8),
+          pw.Text(flightNumber),
+          pw.SizedBox(height: 4),
+          pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Text('Depart', style: const pw.TextStyle(fontSize: 10)),
+                  pw.Text(
+                    departure,
+                    style: pw.TextStyle(
+                      fontSize: 14,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+              pw.Text('→', style: const pw.TextStyle(fontSize: 20)),
+              pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.end,
+                children: [
+                  pw.Text('Arrive', style: const pw.TextStyle(fontSize: 10)),
+                  pw.Text(
+                    arrival,
+                    style: pw.TextStyle(
+                      fontSize: 14,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          pw.SizedBox(height: 4),
+          pw.Text(
+            '$duration • ${stops == 0 ? 'Nonstop' : '$stops stop${stops > 1 ? 's' : ''}'}',
+            style: const pw.TextStyle(fontSize: 12),
+          ),
+        ],
+      ),
+    );
+  }
+
+  pw.Widget _buildAgendaRow(
+    String time,
+    String description,
+    int? durationMinutes,
+    double? distanceMiles,
+    bool isBold,
+  ) {
+    return pw.Padding(
+      padding: const pw.EdgeInsets.symmetric(vertical: 4),
+      child: pw.Row(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.SizedBox(
+            width: 70,
+            child: pw.Text(
+              time,
+              style: pw.TextStyle(
+                fontWeight: isBold ? pw.FontWeight.bold : pw.FontWeight.normal,
+                fontSize: 12,
+              ),
+            ),
+          ),
+          pw.SizedBox(width: 8),
+          pw.Expanded(
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Text(
+                  description,
+                  style: pw.TextStyle(
+                    fontWeight: isBold ? pw.FontWeight.bold : pw.FontWeight.normal,
+                  ),
+                ),
+                if (durationMinutes != null && durationMinutes > 0)
+                  pw.Text(
+                    distanceMiles != null
+                        ? '$durationMinutes min drive • ${distanceMiles.toStringAsFixed(1)} mi'
+                        : '($durationMinutes min)',
+                    style: const pw.TextStyle(
+                      fontSize: 10,
+                      color: PdfColors.grey600,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   Future<MapLocation?> _fetchAirportLocation() async {
     // Try destination airport by IATA code first, fall back to city name
@@ -225,8 +768,20 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
         stops: stops,
       );
 
+      // Generate agenda timeline with actual times
+      AgendaTimeline? agenda;
+      if (route != null &&
+          widget.trip.arriveDestinationIso != null &&
+          widget.trip.departDestinationIso != null) {
+        agenda = route.generateAgenda(
+          arrivalTimeIso: widget.trip.arriveDestinationIso!,
+          departureTimeIso: widget.trip.departDestinationIso!,
+        );
+      }
+
       setState(() {
         _plannedRoute = route;
+        _agenda = agenda;
         _isPlanningRoute = false;
         _routeError = route == null ? 'Unable to plan route right now' : null;
       });
@@ -311,6 +866,9 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final smartAirlineUrl = _buildAirlineBookingUrl();
+    final smartAirlineCode = _extractCarrierCode(widget.trip.outboundFlight);
+
     return Scaffold(
       appBar: AppBar(
         title: Text('${widget.trip.destination} Day Trip'),
@@ -671,7 +1229,119 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                 style: TextStyle(color: context.errorColor, fontSize: 12),
               ),
             ],
-                    if (_plannedRoute != null) ...[
+                    if (_agenda != null) ...[
+                      const SizedBox(height: 12),
+                      Card(
+                        color: _agenda!.isFeasible ? context.greenTint : context.orangeTint,
+                        child: Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(
+                                    _agenda!.isFeasible ? Icons.event_available : Icons.warning,
+                                    color: _agenda!.isFeasible ? context.successColor : context.warningColor,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      'Your Day Plan',
+                                      style: TextStyle(
+                                        color: _agenda!.isFeasible ? context.successColor : context.warningColor,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 16,
+                                      ),
+                                    ),
+                                  ),
+                                  IconButton(
+                                    onPressed: _shareAgenda,
+                                    icon: const Icon(Icons.share),
+                                    tooltip: 'Share Agenda',
+                                    color: context.primaryColor,
+                                  ),
+                                  IconButton(
+                                    onPressed: _printAgenda,
+                                    icon: const Icon(Icons.print),
+                                    tooltip: 'Print Expense Report',
+                                    color: context.primaryColor,
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              // Arrival at destination
+                              _AgendaRow(
+                                time: DateFormat('h:mm a').format(_agenda!.arrivalTime),
+                                description: 'Arrive in ${widget.trip.city}',
+                                isArrival: true,
+                              ),
+                              _AgendaRow(
+                                time: DateFormat('h:mm a').format(_agenda!.startTime),
+                                description: 'Exit airport (+${_agenda!.airportExitMinutes} min)',
+                                isDeparture: true,
+                              ),
+                              const Divider(height: 16),
+                              // Agenda items (travel & stops)
+                              ..._agenda!.items.asMap().entries.map((entry) {
+                                final item = entry.value;
+                                return _AgendaRow(
+                                  time: DateFormat('h:mm a').format(item.time),
+                                  description: item.description,
+                                  isTravel: item.type == AgendaItemType.travel,
+                                  isStop: item.type == AgendaItemType.stop,
+                                  durationMinutes: item.durationMinutes,
+                                  distanceMiles: item.distanceMiles,
+                                );
+                              }),
+                              const Divider(height: 16),
+                              // Return to airport requirement
+                              _AgendaRow(
+                                time: DateFormat('h:mm a').format(_agenda!.endTime),
+                                description: 'Must be at airport (-${_agenda!.airportBufferMinutes} min)',
+                                isDeparture: true,
+                              ),
+                              _AgendaRow(
+                                time: DateFormat('h:mm a').format(_agenda!.departureTime),
+                                description: 'Depart ${widget.trip.city}',
+                                isArrival: true,
+                              ),
+                              const SizedBox(height: 12),
+                              // Remaining time message
+                              Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: _agenda!.isFeasible ? context.successColor.withOpacity(0.1) : context.errorColor.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: _agenda!.isFeasible ? context.successColor : context.errorColor,
+                                  ),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      _agenda!.isFeasible ? Icons.check_circle : Icons.error,
+                                      color: _agenda!.isFeasible ? context.successColor : context.errorColor,
+                                      size: 20,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        _agenda!.remainingTimeMessage,
+                                        style: TextStyle(
+                                          color: _agenda!.isFeasible ? context.successColor : context.errorColor,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ] else if (_plannedRoute != null) ...[
                       const SizedBox(height: 12),
                       Card(
                         color: context.greenTint,
@@ -784,12 +1454,22 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
             const SizedBox(height: 24),
 
             // Booking Links
-            if (widget.trip.googleFlightsUrl != null || widget.trip.kayakUrl != null || widget.trip.airlineUrl != null) ...[
+            if (smartAirlineUrl != null ||
+                widget.trip.googleFlightsUrl != null ||
+                widget.trip.kayakUrl != null ||
+                (smartAirlineCode == 'AA' && widget.trip.airlineUrl != null)) ...[
               Text(
                 'Book Your Flights',
                 style: Theme.of(context).textTheme.titleLarge,
               ),
               const SizedBox(height: 12),
+              if (smartAirlineUrl != null)
+                _BookingButton(
+                  label: 'Book on ${_airlineNameForCode(smartAirlineCode ?? '')}',
+                  icon: Icons.flight_takeoff,
+                  color: context.successColor,
+                  onPressed: () => _openAirlineWebView(smartAirlineUrl, title: 'Book ${widget.trip.outboundFlight}'),
+                ),
               if (widget.trip.googleFlightsUrl != null)
                 _BookingButton(
                   label: 'Search on Google Flights',
@@ -804,7 +1484,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                   color: context.warningColor,
                   onPressed: () => _launchUrl(widget.trip.kayakUrl),
                 ),
-              if (widget.trip.airlineUrl != null)
+              if (widget.trip.airlineUrl != null && smartAirlineCode == 'AA')
                 _BookingButton(
                   label: 'Search AA Award Flights',
                   icon: Icons.card_giftcard,
@@ -1062,7 +1742,7 @@ class _BookingButton extends StatelessWidget {
   final String label;
   final IconData icon;
   final Color color;
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
 
   const _BookingButton({
     required this.label,
@@ -1087,6 +1767,125 @@ class _BookingButton extends StatelessWidget {
             padding: const EdgeInsets.all(16),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class AirlineCheckoutScreen extends StatelessWidget {
+  final String url;
+  final String title;
+
+  const AirlineCheckoutScreen({
+    super.key,
+    required this.url,
+    required this.title,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(title),
+      ),
+      body: InAppWebView(
+        initialUrlRequest: URLRequest(
+          url: WebUri(url),
+        ),
+      ),
+    );
+  }
+}
+
+class _AgendaRow extends StatelessWidget {
+  final String time;
+  final String description;
+  final bool isArrival;
+  final bool isDeparture;
+  final bool isTravel;
+  final bool isStop;
+  final int? durationMinutes;
+  final double? distanceMiles;
+
+  const _AgendaRow({
+    required this.time,
+    required this.description,
+    this.isArrival = false,
+    this.isDeparture = false,
+    this.isTravel = false,
+    this.isStop = false,
+    this.durationMinutes,
+    this.distanceMiles,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    IconData icon;
+    Color iconColor;
+
+    if (isArrival) {
+      icon = Icons.flight_land;
+      iconColor = context.primaryColor;
+    } else if (isDeparture) {
+      icon = Icons.airport_shuttle;
+      iconColor = context.primaryColor;
+    } else if (isTravel) {
+      icon = Icons.directions_car;
+      iconColor = context.textSecondary;
+    } else if (isStop) {
+      icon = Icons.place;
+      iconColor = context.successColor;
+    } else {
+      icon = Icons.circle;
+      iconColor = context.borderColor;
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 70,
+            child: Text(
+              time,
+              style: TextStyle(
+                fontWeight: isArrival || isDeparture || isStop ? FontWeight.bold : FontWeight.normal,
+                color: isArrival || isDeparture || isStop ? context.primaryColor : context.textSecondary,
+                fontSize: 13,
+              ),
+            ),
+          ),
+          Icon(icon, size: 16, color: iconColor),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  description,
+                  style: TextStyle(
+                    fontWeight: isArrival || isDeparture || isStop ? FontWeight.w600 : FontWeight.normal,
+                    color: isTravel ? context.textSecondary : null,
+                  ),
+                ),
+                if (durationMinutes != null && durationMinutes! > 0)
+                  Text(
+                    isStop
+                        ? '($durationMinutes min)'
+                        : distanceMiles != null
+                            ? '${durationMinutes} min drive • ${distanceMiles!.toStringAsFixed(1)} mi'
+                            : '${durationMinutes} min drive',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: context.textSecondary,
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

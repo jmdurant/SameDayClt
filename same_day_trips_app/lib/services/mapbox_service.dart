@@ -71,9 +71,9 @@ class MapboxService {
     }
   }
 
-  /// Calculate travel times between multiple points using Matrix API
-  /// Returns a matrix of durations in seconds
-  Future<List<List<double>>> calculateTravelTimes({
+  /// Calculate travel times and distances between multiple points using Matrix API
+  /// Returns a tuple: (durations matrix in seconds, distances matrix in meters)
+  Future<(List<List<double>>, List<List<double>>)> calculateTravelTimesAndDistances({
     required List<MapLocation> locations,
     String profile = 'driving-traffic',
   }) async {
@@ -93,20 +93,44 @@ class MapboxService {
           'access_token': accessToken,
           'sources': List.generate(locations.length, (i) => i).join(';'),
           'destinations': List.generate(locations.length, (i) => i).join(';'),
+          'annotations': 'duration,distance', // Request both duration and distance
         },
       );
 
       // Parse duration matrix
       final durations = response.data['durations'] as List? ?? [];
-      return durations
+      final durationMatrix = durations
           .map((row) => (row as List)
               .map((d) => d == null ? double.infinity : (d as num).toDouble())
               .toList())
           .toList();
+
+      // Parse distance matrix (in meters)
+      final distances = response.data['distances'] as List? ?? [];
+      final distanceMatrix = distances
+          .map((row) => (row as List)
+              .map((d) => d == null ? double.infinity : (d as num).toDouble())
+              .toList())
+          .toList();
+
+      return (durationMatrix, distanceMatrix);
     } catch (e) {
       print('⚠️ Mapbox Matrix API failed: $e');
       rethrow;
     }
+  }
+
+  /// Calculate travel times between multiple points using Matrix API
+  /// Returns a matrix of durations in seconds
+  Future<List<List<double>>> calculateTravelTimes({
+    required List<MapLocation> locations,
+    String profile = 'driving-traffic',
+  }) async {
+    final (durations, _) = await calculateTravelTimesAndDistances(
+      locations: locations,
+      profile: profile,
+    );
+    return durations;
   }
 
   /// Calculate route timeline for airport → stops → airport
@@ -124,17 +148,20 @@ class MapboxService {
         airport,
       ];
 
-      // Get travel time matrix
-      final matrix = await calculateTravelTimes(locations: locations);
+      // Get travel time and distance matrices
+      final (durationMatrix, distanceMatrix) = await calculateTravelTimesAndDistances(locations: locations);
 
-      // Calculate leg durations: airport→stop1, stop1→stop2, ..., lastStop→airport
+      // Calculate leg durations and distances: airport→stop1, stop1→stop2, ..., lastStop→airport
       final legDurations = <double>[];
+      final legDistances = <double>[];
       for (var i = 0; i < locations.length - 1; i++) {
-        legDurations.add(matrix[i][i + 1]);
+        legDurations.add(durationMatrix[i][i + 1]);
+        legDistances.add(distanceMatrix[i][i + 1]);
       }
 
       return RouteTimeline(
         legDurations: legDurations,
+        legDistances: legDistances,
         stops: stops,
         airport: airport,
       );
@@ -158,7 +185,7 @@ class MapboxService {
     try {
       // Build locations list for matrix: airport, stops..., airport
       final locations = <MapLocation>[airport, ...stops.map((s) => s.location), airport];
-      final matrixSeconds = await calculateTravelTimes(locations: locations, profile: profile);
+      final (matrixSeconds, matrixMeters) = await calculateTravelTimesAndDistances(locations: locations, profile: profile);
       final matrixMinutes = matrixSeconds
           .map((row) => row.map((d) => d / 60.0).toList())
           .toList();
@@ -200,14 +227,16 @@ class MapboxService {
 
       final orderedStops = bestOrder.map((idx) => stops[idx - 1]).toList();
       final legDurations = _buildLegDurations(bestOrder, matrixMinutes);
+      final legDistances = _buildLegDistances(bestOrder, matrixMeters);
 
       return RouteTimeline(
         legDurations: legDurations,
+        legDistances: legDistances,
         stops: orderedStops,
         airport: airport,
       );
     } catch (e) {
-      print('?? Optimal routing failed: $e');
+      print('⚠️ Optimal routing failed: $e');
       return null;
     }
   }
@@ -291,6 +320,19 @@ class MapboxService {
     return legDurations;
   }
 
+  List<double> _buildLegDistances(List<int> order, List<List<double>> matrixMeters) {
+    final stopCount = order.length;
+    final legDistances = <double>[];
+
+    legDistances.add(matrixMeters[0][order.first]);
+    for (var i = 0; i < stopCount - 1; i++) {
+      legDistances.add(matrixMeters[order[i]][order[i + 1]]);
+    }
+    legDistances.add(matrixMeters[order.last][stopCount + 1]);
+
+    return legDistances;
+  }
+
 }
 
 /// Search suggestion from Search Box API
@@ -370,14 +412,16 @@ class StopWithLocation {
   });
 }
 
-/// Route timeline with drive times
+/// Route timeline with drive times and distances
 class RouteTimeline {
   final List<double> legDurations; // In seconds
+  final List<double> legDistances; // In meters
   final List<StopWithLocation> stops;
   final MapLocation airport;
 
   RouteTimeline({
     required this.legDurations,
+    required this.legDistances,
     required this.stops,
     required this.airport,
   });
@@ -385,6 +429,11 @@ class RouteTimeline {
   /// Total driving time in minutes
   double get totalDrivingMinutes {
     return legDurations.fold(0.0, (sum, duration) => sum + duration) / 60.0;
+  }
+
+  /// Total driving distance in miles
+  double get totalDrivingMiles {
+    return legDistances.fold(0.0, (sum, distance) => sum + distance) * 0.000621371; // Convert meters to miles
   }
 
   /// Total stop time in minutes
@@ -411,4 +460,170 @@ class RouteTimeline {
     }
     return '${hours}h ${mins}m';
   }
+
+  /// Generate detailed agenda with actual times
+  /// Returns null if the schedule is invalid or times can't be parsed
+  AgendaTimeline? generateAgenda({
+    required String arrivalTimeIso, // ISO timestamp from flight arrival
+    required String departureTimeIso, // ISO timestamp from flight departure
+    int airportExitMinutes = 20, // Time to exit airport after arrival
+    int airportBufferMinutes = 45, // Time to arrive at airport before departure
+  }) {
+    try {
+      final arrivalTime = DateTime.parse(arrivalTimeIso);
+      final departureTime = DateTime.parse(departureTimeIso);
+
+      // Calculate available time window
+      final startTime = arrivalTime.add(Duration(minutes: airportExitMinutes));
+      final endTime = departureTime.subtract(Duration(minutes: airportBufferMinutes));
+
+      if (startTime.isAfter(endTime)) {
+        return null; // Invalid time window
+      }
+
+      final availableMinutes = endTime.difference(startTime).inMinutes;
+
+      // Build agenda items
+      final items = <AgendaItem>[];
+      var currentTime = startTime;
+
+      // First leg: Airport → First Stop
+      final firstDriveMinutes = (legDurations[0] / 60).round();
+      final firstDistanceMiles = legDistances[0] * 0.000621371; // Convert meters to miles
+      items.add(AgendaItem(
+        time: currentTime,
+        type: AgendaItemType.travel,
+        description: 'Depart airport → ${stops[0].name}',
+        durationMinutes: firstDriveMinutes,
+        distanceMiles: firstDistanceMiles,
+      ));
+      currentTime = currentTime.add(Duration(minutes: firstDriveMinutes));
+
+      // Stops and travel between them
+      for (var i = 0; i < stops.length; i++) {
+        final stop = stops[i];
+
+        // Add stop
+        items.add(AgendaItem(
+          time: currentTime,
+          type: AgendaItemType.stop,
+          description: stop.name,
+          durationMinutes: stop.durationMinutes,
+        ));
+        currentTime = currentTime.add(Duration(minutes: stop.durationMinutes));
+
+        // Add travel to next stop or back to airport
+        final nextDriveMinutes = (legDurations[i + 1] / 60).round();
+        final nextDistanceMiles = legDistances[i + 1] * 0.000621371;
+        final nextDescription = i < stops.length - 1
+            ? '${stop.name} → ${stops[i + 1].name}'
+            : '${stop.name} → Return to airport';
+
+        items.add(AgendaItem(
+          time: currentTime,
+          type: AgendaItemType.travel,
+          description: nextDescription,
+          durationMinutes: nextDriveMinutes,
+          distanceMiles: nextDistanceMiles,
+        ));
+        currentTime = currentTime.add(Duration(minutes: nextDriveMinutes));
+      }
+
+      // Calculate remaining time
+      final totalUsedMinutes = endTime.difference(startTime).inMinutes -
+          endTime.difference(currentTime).inMinutes;
+      final remainingMinutes = endTime.difference(currentTime).inMinutes;
+
+      final isFeasible = remainingMinutes >= 0;
+
+      return AgendaTimeline(
+        items: items,
+        arrivalTime: arrivalTime,
+        departureTime: departureTime,
+        startTime: startTime,
+        endTime: endTime,
+        remainingMinutes: remainingMinutes,
+        isFeasible: isFeasible,
+        airportExitMinutes: airportExitMinutes,
+        airportBufferMinutes: airportBufferMinutes,
+      );
+    } catch (e) {
+      print('⚠️ Failed to generate agenda: $e');
+      return null;
+    }
+  }
+}
+
+/// Timeline agenda with actual times
+class AgendaTimeline {
+  final List<AgendaItem> items;
+  final DateTime arrivalTime; // Flight arrival
+  final DateTime departureTime; // Flight departure
+  final DateTime startTime; // When you can start (arrival + exit time)
+  final DateTime endTime; // When you must be at airport (departure - buffer)
+  final int remainingMinutes; // Minutes left after all stops (negative if overbooked)
+  final bool isFeasible; // Whether the schedule fits
+  final int airportExitMinutes;
+  final int airportBufferMinutes;
+
+  AgendaTimeline({
+    required this.items,
+    required this.arrivalTime,
+    required this.departureTime,
+    required this.startTime,
+    required this.endTime,
+    required this.remainingMinutes,
+    required this.isFeasible,
+    required this.airportExitMinutes,
+    required this.airportBufferMinutes,
+  });
+
+  /// Get formatted remaining time message
+  String get remainingTimeMessage {
+    if (!isFeasible) {
+      final overMinutes = remainingMinutes.abs();
+      final hours = overMinutes ~/ 60;
+      final mins = overMinutes % 60;
+      if (hours == 0) {
+        return 'Not enough time - remove $mins minutes of activities';
+      }
+      return mins == 0
+          ? 'Not enough time - remove ${hours}h of activities'
+          : 'Not enough time - remove ${hours}h ${mins}m of activities';
+    }
+
+    final hours = remainingMinutes ~/ 60;
+    final mins = remainingMinutes % 60;
+    if (hours == 0) {
+      return 'You still have $mins minutes to schedule another stop';
+    }
+    return mins == 0
+        ? 'You still have ${hours}h to schedule another stop'
+        : 'You still have ${hours}h ${mins}m to schedule another stop';
+  }
+}
+
+/// Individual agenda item
+class AgendaItem {
+  final DateTime time;
+  final AgendaItemType type;
+  final String description;
+  final int durationMinutes;
+  final double? distanceMiles; // Distance for travel items (in miles)
+
+  AgendaItem({
+    required this.time,
+    required this.type,
+    required this.description,
+    required this.durationMinutes,
+    this.distanceMiles,
+  });
+
+  /// Get end time
+  DateTime get endTime => time.add(Duration(minutes: durationMinutes));
+}
+
+enum AgendaItemType {
+  travel,
+  stop,
 }

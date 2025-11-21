@@ -6,6 +6,7 @@ class FlightOffer {
   final String flightNumbers;
   final int numStops;
   final double price;
+  final List<String> carriers; // carrier IATA codes for all segments
 
   // Store local hours directly from API to avoid timezone conversion issues
   final int departHourLocal;
@@ -17,7 +18,7 @@ class FlightOffer {
   final String? departTimezoneOffset;
   final String? arriveTimezoneOffset;
 
-  FlightOffer copyWith({double? price}) {
+  FlightOffer copyWith({double? price, List<String>? carriers}) {
     return FlightOffer(
       departTime: departTime,
       arriveTime: arriveTime,
@@ -25,6 +26,7 @@ class FlightOffer {
       flightNumbers: flightNumbers,
       numStops: numStops,
       price: price ?? this.price,
+      carriers: carriers ?? this.carriers,
       departHourLocal: departHourLocal,
       arriveHourLocal: arriveHourLocal,
       departMinuteLocal: departMinuteLocal,
@@ -41,6 +43,7 @@ class FlightOffer {
     required this.flightNumbers,
     required this.numStops,
     required this.price,
+    required this.carriers,
     required this.departHourLocal,
     required this.arriveHourLocal,
     required this.departMinuteLocal,
@@ -80,6 +83,12 @@ class FlightOffer {
         .map((seg) => '${seg['carrierCode']}${seg['number']}')
         .join(', ');
 
+    final carriers = segments
+        .map((seg) => (seg['carrierCode'] as String?)?.toUpperCase() ?? '')
+        .where((c) => c.isNotEmpty)
+        .toSet()
+        .toList();
+
     // Number of stops
     final numStops = segments.length - 1;
 
@@ -93,6 +102,7 @@ class FlightOffer {
       flightNumbers: flightNumbers,
       numStops: numStops,
       price: price,
+      carriers: carriers,
       departHourLocal: departHourLocal,
       arriveHourLocal: arriveHourLocal,
       departMinuteLocal: departMinuteLocal,
@@ -173,6 +183,7 @@ class SearchCriteria {
   final int minDuration; // Minimum flight duration in minutes
   final int maxDuration; // Maximum flight duration in minutes
   final List<String>? destinations; // Optional specific destinations
+  final List<String>? airlines; // Optional allowed airline codes
 
   SearchCriteria({
     required this.origin,
@@ -185,5 +196,6 @@ class SearchCriteria {
     required this.minDuration,
     required this.maxDuration,
     this.destinations,
+    this.airlines,
   });
 }

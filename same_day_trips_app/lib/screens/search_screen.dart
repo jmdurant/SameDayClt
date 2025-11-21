@@ -34,6 +34,8 @@ class _SearchScreenState extends State<SearchScreen> {
   int _minDuration = 50; // filter out very short hops
   int _maxDuration = 204; // ~3.4 hours flight time
   final List<String> _selectedDestinations = [];
+  final List<String> _selectedAirlines = [];
+  final List<String> _airlineOptions = ['AA', 'DL', 'UA', 'WN', 'AS', 'B6', 'NK', 'F9'];
 
   bool _isSearching = false;
   bool _isDetectingAirport = false;
@@ -121,6 +123,9 @@ class _SearchScreenState extends State<SearchScreen> {
     print('  Min ground time: $_minGroundTime hrs');
     print('  Min duration: $_minDuration min');
     print('  Max duration: $_maxDuration min');
+    if (_selectedAirlines.isNotEmpty) {
+      print('  Airlines: ${_selectedAirlines.join(',')}');
+    }
 
     setState(() => _isSearching = true);
 
@@ -136,6 +141,7 @@ class _SearchScreenState extends State<SearchScreen> {
         minGroundTime: _minGroundTime,
         minDuration: _minDuration,
         maxDuration: _maxDuration,
+        airlines: _selectedAirlines.isEmpty ? null : _selectedAirlines,
         destinations: _selectedDestinations.isEmpty ? null : _selectedDestinations,
       );
 
@@ -201,6 +207,12 @@ class _SearchScreenState extends State<SearchScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              if (_isDetectingAirport)
+                LinearProgressIndicator(
+                  minHeight: 3,
+                  backgroundColor: context.blueTint,
+                ),
+
               // Header
               Card(
                 child: Padding(
@@ -462,6 +474,34 @@ class _SearchScreenState extends State<SearchScreen> {
                     ],
                   ),
                 ),
+              ),
+              const SizedBox(height: 24),
+
+              // Airline Filter
+              Text(
+                'Preferred Airlines (optional)',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 4,
+                children: _airlineOptions.map((code) {
+                  final selected = _selectedAirlines.contains(code);
+                  return FilterChip(
+                    label: Text(code),
+                    selected: selected,
+                    onSelected: (val) {
+                      setState(() {
+                        if (val) {
+                          _selectedAirlines.add(code);
+                        } else {
+                          _selectedAirlines.remove(code);
+                        }
+                      });
+                    },
+                  );
+                }).toList(),
               ),
               const SizedBox(height: 24),
 

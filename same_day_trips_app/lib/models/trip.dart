@@ -18,6 +18,12 @@ class Trip {
   final String returnDuration;
   final double returnPrice;
 
+  // Raw ISO timestamps for agenda generation
+  final String? departOriginIso;
+  final String? arriveDestinationIso;
+  final String? departDestinationIso;
+  final String? arriveOriginIso;
+
   // Timezone offsets (e.g., "-05:00", "+01:00")
   final String? departOriginTz;
   final String? arriveDestinationTz;
@@ -51,6 +57,7 @@ class Trip {
   final String? turoUrl;
   final String? turoSearchUrl;
   final String? turoVehicle;
+  final String? offerId; // Duffel offer id for checkout links
 
   Trip({
     required this.origin,
@@ -69,6 +76,10 @@ class Trip {
     required this.arriveOrigin,
     required this.returnDuration,
     required this.returnPrice,
+    this.departOriginIso,
+    this.arriveDestinationIso,
+    this.departDestinationIso,
+    this.arriveOriginIso,
     this.departOriginTz,
     this.arriveDestinationTz,
     this.departDestinationTz,
@@ -90,6 +101,7 @@ class Trip {
     this.turoUrl,
     this.turoSearchUrl,
     this.turoVehicle,
+    this.offerId,
   });
 
   factory Trip.fromJson(Map<String, dynamic> json) {
@@ -110,6 +122,10 @@ class Trip {
       arriveOrigin: json['Arrive ${json['Origin']}'] ?? json['Arrive CLT'] ?? '',
       returnDuration: json['Return Duration'] ?? '',
       returnPrice: (json['Return Price'] ?? 0.0).toDouble(),
+      departOriginIso: json['Depart Origin ISO'],
+      arriveDestinationIso: json['Arrive Destination ISO'],
+      departDestinationIso: json['Depart Destination ISO'],
+      arriveOriginIso: json['Arrive Origin ISO'],
       departOriginTz: json['Depart Origin TZ'],
       arriveDestinationTz: json['Arrive Destination TZ'],
       departDestinationTz: json['Depart Destination TZ'],
@@ -126,6 +142,7 @@ class Trip {
       turoUrl: json['Turo URL'],
       turoSearchUrl: json['Turo Search URL'],
       turoVehicle: json['Turo Vehicle'],
+      offerId: json['OfferId'] ?? json['offerId'],
     );
   }
 
@@ -147,6 +164,10 @@ class Trip {
       'Arrive $origin': arriveOrigin,
       'Return Duration': returnDuration,
       'Return Price': returnPrice,
+      'Depart Origin ISO': departOriginIso,
+      'Arrive Destination ISO': arriveDestinationIso,
+      'Depart Destination ISO': departDestinationIso,
+      'Arrive Origin ISO': arriveOriginIso,
       'Depart Origin TZ': departOriginTz,
       'Arrive Destination TZ': arriveDestinationTz,
       'Depart Destination TZ': departDestinationTz,
@@ -163,6 +184,7 @@ class Trip {
       'Turo URL': turoUrl,
       'Turo Search URL': turoSearchUrl,
       'Turo Vehicle': turoVehicle,
+      'OfferId': offerId,
     };
   }
 
@@ -174,6 +196,7 @@ class Trip {
     String? awardMilesReturnFirst,
     bool? isLoadingTuro,
     bool? isLoadingRewards,
+    String? offerId,
   }) {
     return Trip(
       origin: origin,
@@ -192,6 +215,10 @@ class Trip {
       arriveOrigin: arriveOrigin,
       returnDuration: returnDuration,
       returnPrice: returnPrice,
+      departOriginIso: departOriginIso,
+      arriveDestinationIso: arriveDestinationIso,
+      departDestinationIso: departDestinationIso,
+      arriveOriginIso: arriveOriginIso,
       departOriginTz: departOriginTz,
       arriveDestinationTz: arriveDestinationTz,
       departDestinationTz: departDestinationTz,
@@ -213,6 +240,7 @@ class Trip {
       turoUrl: turoUrl ?? this.turoUrl,
       turoSearchUrl: turoSearchUrl,
       turoVehicle: turoVehicle ?? this.turoVehicle,
+      offerId: offerId ?? this.offerId,
     )..isLoadingTuro = isLoadingTuro ?? this.isLoadingTuro
      ..isLoadingRewards = isLoadingRewards ?? this.isLoadingRewards;
   }

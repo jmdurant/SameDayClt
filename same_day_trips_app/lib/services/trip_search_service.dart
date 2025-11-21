@@ -128,6 +128,7 @@ class TripSearchService {
           outbound: offer.outbound,
           returnFlight: offer.returnFlight,
           groundTimeHours: groundTimeHours,
+          offerId: offer.offerId,
         );
       }).whereType<Trip>().toList();
 
@@ -150,6 +151,7 @@ class TripSearchService {
     required FlightOffer outbound,
     required FlightOffer returnFlight,
     required double groundTimeHours,
+    String? offerId,
   }) {
     final totalTripMinutes = outbound.durationMinutes +
         (groundTimeHours * 60).round() +
@@ -220,6 +222,7 @@ class TripSearchService {
         _amadeus.formatTime(returnFlight.departTime),
       ),
       turoVehicle: null,
+      offerId: offerId,
     );
   }
 
@@ -231,17 +234,11 @@ class TripSearchService {
     String outboundTime,
     String returnTime,
   ) {
-    // Round trip format: origin.dest.date*dest.origin.date
-    final flightString = '$origin.$dest.$date*$dest.$origin.$date';
-
-    // Add departure time filters using URL parameters
-    // Format times as HHMM (e.g., "0730" for 7:30 AM)
-    final outboundHHMM = outboundTime.replaceAll(':', '');
-    final returnHHMM = returnTime.replaceAll(':', '');
-
-    // Build URL with time filters
-    // Note: Google Flights may not honor all these parameters, but it helps
-    return 'https://www.google.com/flights?hl=en#flt=$flightString;c:USD;e:1;sd:1;t:f;tt:o;dep1:$outboundHHMM;dep2:$returnHHMM';
+    // Google Travel query string that reliably pre-fills round-trip
+    final query =
+        '$origin to $dest on $date return $date for 1 adult';
+    final encoded = Uri.encodeComponent(query);
+    return 'https://www.google.com/travel/flights?q=$encoded';
   }
 
   /// Generate Kayak URL with specific times
@@ -286,8 +283,10 @@ class TripSearchService {
     String date,
     {required bool isOutbound}
   ) {
-    // AA format: https://www.aa.com/booking/search?locale=en_US&pax=1&adult=1&type=OneWay&searchType=Award&slices=[{"orig":"CLT","dest":"ATL","date":"2025-11-15"}]
-    final slice = '{"orig":"$origin","origNearby":false,"dest":"$dest","destNearby":false,"date":"$date"}';
-    return 'https://www.aa.com/booking/search?locale=en_US&pax=1&adult=1&child=0&type=OneWay&searchType=Award&cabin=&carriers=ALL&slices=%5B$slice%5D&maxAwardSegmentAllowed=2';
+    // AA round-trip award search using two slices (outbound + return)
+    final outboundSlice = '{"orig":"$origin","origNearby":false,"dest":"$dest","destNearby":false,"date":"$date"}';
+    final returnSlice = '{"orig":"$dest","origNearby":false,"dest":"$origin","destNearby":false,"date":"$date"}';
+    final slicesEncoded = Uri.encodeComponent('[$outboundSlice,$returnSlice]');
+    return 'https://www.aa.com/booking/search?locale=en_US&pax=1&adult=1&child=0&type=RoundTrip&searchType=Award&cabin=&carriers=ALL&slices=$slicesEncoded&maxAwardSegmentAllowed=2';
   }
 }

@@ -19,6 +19,7 @@ class ApiService {
     required double minGroundTime,
     required int minDuration,
     required int maxDuration,
+    List<String>? airlines,
     List<String>? destinations,
   }) async {
     try {
@@ -36,6 +37,7 @@ class ApiService {
         minGroundTime: minGroundTime,
         minDuration: minDuration,
         maxDuration: maxDuration,
+        airlines: airlines,
         destinations: destinations,
       );
 
