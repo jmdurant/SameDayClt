@@ -11,6 +11,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../models/trip.dart';
 import '../models/stop.dart';
 import '../services/navigation_service.dart';
+import '../theme/app_colors.dart';
 
 class VoiceAssistantScreen extends StatefulWidget {
   final Trip trip;
@@ -238,7 +239,7 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> with Widget
             SnackBar(
               content: Text('Calling$nameText...'),
               duration: const Duration(seconds: 2),
-              backgroundColor: Colors.green,
+              backgroundColor: context.successColor,
             ),
           );
         }
@@ -249,7 +250,7 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> with Widget
             SnackBar(
               content: Text('Unable to open phone dialer'),
               duration: const Duration(seconds: 3),
-              backgroundColor: Colors.red,
+              backgroundColor: context.errorColor,
             ),
           );
         }
@@ -261,7 +262,7 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> with Widget
           SnackBar(
             content: Text('Failed to initiate call'),
             duration: const Duration(seconds: 3),
-            backgroundColor: Colors.red,
+            backgroundColor: context.errorColor,
           ),
         );
       }
@@ -323,7 +324,7 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> with Widget
             SnackBar(
               content: Text('Added "$title" to your calendar'),
               duration: const Duration(seconds: 3),
-              backgroundColor: Colors.green,
+              backgroundColor: context.successColor,
             ),
           );
         }
@@ -337,7 +338,7 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> with Widget
           SnackBar(
             content: Text('Failed to add event to calendar'),
             duration: const Duration(seconds: 3),
-            backgroundColor: Colors.red,
+            backgroundColor: context.errorColor,
           ),
         );
       }
@@ -790,7 +791,7 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen> with Widget
                         SnackBar(
                           content: Text('Added "$name" to trip'),
                           duration: const Duration(seconds: 3),
-                          backgroundColor: Colors.green,
+                          backgroundColor: context.successColor,
                         ),
                       );
                     }

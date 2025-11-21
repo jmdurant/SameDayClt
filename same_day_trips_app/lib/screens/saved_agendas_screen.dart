@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import '../models/saved_trip.dart';
 import '../services/saved_trips_service.dart';
 import 'trip_detail_screen.dart';
+import '../theme/app_colors.dart';
 
 class SavedAgendasScreen extends StatefulWidget {
   const SavedAgendasScreen({super.key});
@@ -52,7 +53,7 @@ class _SavedAgendasScreenState extends State<SavedAgendasScreen> {
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
+              backgroundColor: context.errorColor,
               foregroundColor: Colors.white,
             ),
             child: const Text('Delete'),
@@ -68,17 +69,17 @@ class _SavedAgendasScreenState extends State<SavedAgendasScreen> {
 
       if (success) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Trip deleted'),
-            backgroundColor: Colors.green,
+          SnackBar(
+            content: const Text('Trip deleted'),
+            backgroundColor: context.successColor,
           ),
         );
         _loadSavedTrips(); // Reload the list
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Failed to delete trip'),
-            backgroundColor: Colors.red,
+          SnackBar(
+            content: const Text('Failed to delete trip'),
+            backgroundColor: context.errorColor,
           ),
         );
       }
@@ -102,14 +103,14 @@ class _SavedAgendasScreenState extends State<SavedAgendasScreen> {
                       Icon(
                         Icons.bookmark_border,
                         size: 64,
-                        color: Colors.grey.shade400,
+                        color: context.borderColor,
                       ),
                       const SizedBox(height: 16),
                       Text(
                         'No saved trips yet',
                         style: TextStyle(
                           fontSize: 18,
-                          color: Colors.grey.shade600,
+                          color: context.textSecondary,
                         ),
                       ),
                       const SizedBox(height: 8),
@@ -117,7 +118,7 @@ class _SavedAgendasScreenState extends State<SavedAgendasScreen> {
                         'Save trips from the trip details page',
                         style: TextStyle(
                           fontSize: 14,
-                          color: Colors.grey.shade500,
+                          color: context.textSecondary,
                         ),
                       ),
                     ],
@@ -185,7 +186,7 @@ class _SavedTripCard extends StatelessWidget {
                       vertical: 8,
                     ),
                     decoration: BoxDecoration(
-                      color: Colors.blue,
+                      color: context.primaryColor,
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
@@ -213,7 +214,7 @@ class _SavedTripCard extends StatelessWidget {
                           trip.date,
                           style: TextStyle(
                             fontSize: 14,
-                            color: Colors.grey.shade600,
+                            color: context.textSecondary,
                           ),
                         ),
                       ],
@@ -221,7 +222,7 @@ class _SavedTripCard extends StatelessWidget {
                   ),
                   IconButton(
                     icon: const Icon(Icons.delete_outline),
-                    color: Colors.red,
+                    color: context.errorColor,
                     onPressed: onDelete,
                   ),
                 ],
@@ -234,19 +235,19 @@ class _SavedTripCard extends StatelessWidget {
                   _InfoItem(
                     icon: Icons.schedule,
                     label: trip.groundTime,
-                    color: Colors.green,
+                    color: context.successColor,
                   ),
                   const SizedBox(width: 16),
                   _InfoItem(
                     icon: Icons.attach_money,
                     label: '\$${trip.totalFlightCost.toStringAsFixed(0)}',
-                    color: Colors.blue,
+                    color: context.primaryColor,
                   ),
                   const SizedBox(width: 16),
                   _InfoItem(
                     icon: Icons.flight_takeoff,
                     label: '${trip.departOrigin} - ${trip.arriveOrigin}',
-                    color: Colors.orange,
+                    color: context.warningColor,
                   ),
                 ],
               ),
@@ -257,7 +258,7 @@ class _SavedTripCard extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.blue.shade50,
+                    color: context.blueTint,
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Row(
@@ -265,7 +266,7 @@ class _SavedTripCard extends StatelessWidget {
                       Icon(
                         Icons.note,
                         size: 16,
-                        color: Colors.blue.shade700,
+                        color: context.primaryColor,
                       ),
                       const SizedBox(width: 8),
                       Expanded(
@@ -273,7 +274,7 @@ class _SavedTripCard extends StatelessWidget {
                           savedTrip.notes!,
                           style: TextStyle(
                             fontSize: 13,
-                            color: Colors.blue.shade900,
+                            color: context.primaryColor,
                           ),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
@@ -291,14 +292,14 @@ class _SavedTripCard extends StatelessWidget {
                   Icon(
                     Icons.bookmark,
                     size: 14,
-                    color: Colors.grey.shade500,
+                    color: context.textSecondary,
                   ),
                   const SizedBox(width: 4),
                   Text(
                     'Saved $savedDate',
                     style: TextStyle(
                       fontSize: 12,
-                      color: Colors.grey.shade500,
+                      color: context.textSecondary,
                     ),
                   ),
                 ],
@@ -332,7 +333,7 @@ class _InfoItem extends StatelessWidget {
           label,
           style: TextStyle(
             fontSize: 12,
-            color: Colors.grey.shade700,
+            color: context.textSecondary,
           ),
         ),
       ],

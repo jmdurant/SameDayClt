@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/trip.dart';
 import '../utils/time_formatter.dart';
+import '../theme/app_colors.dart';
 import 'trip_detail_screen.dart';
 
 class ResultsScreen extends StatefulWidget {
@@ -114,7 +115,7 @@ class _ResultsScreenState extends State<ResultsScreen> {
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(16),
-            color: Colors.blue.shade50,
+            color: context.blueTint,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -142,7 +143,7 @@ class _ResultsScreenState extends State<ResultsScreen> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.search_off, size: 64, color: Colors.grey.shade400),
+                        Icon(Icons.search_off, size: 64, color: context.textSecondary),
                         const SizedBox(height: 16),
                         Text(
                           'No trips found',
@@ -152,7 +153,7 @@ class _ResultsScreenState extends State<ResultsScreen> {
                         Text(
                           'Try adjusting your search criteria',
                           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                color: Colors.grey.shade600,
+                                color: context.textSecondary,
                               ),
                         ),
                       ],
@@ -211,7 +212,7 @@ class TripCard extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
-                      color: Colors.blue,
+                      color: context.primaryColor,
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(
@@ -234,7 +235,7 @@ class TripCard extends StatelessWidget {
                   Text(
                     '\$${trip.totalFlightCost.toStringAsFixed(0)}',
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          color: Colors.green.shade700,
+                          color: context.successColor,
                           fontWeight: FontWeight.bold,
                         ),
                   ),
@@ -246,19 +247,19 @@ class TripCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.green.shade50,
+                  color: context.greenTint,
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.green.shade200),
+                  border: Border.all(color: context.successColor.withOpacity(0.3)),
                 ),
                 child: Row(
                   children: [
-                    Icon(Icons.schedule, color: Colors.green.shade700),
+                    Icon(Icons.schedule, color: context.successColor),
                     const SizedBox(width: 8),
                     Text(
                       'Meeting Time: ',
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
-                        color: Colors.green.shade900,
+                        color: context.successColor,
                       ),
                     ),
                     Text(
@@ -266,13 +267,13 @@ class TripCard extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
-                        color: Colors.green.shade700,
+                        color: context.successColor,
                       ),
                     ),
                     const Spacer(),
                     Text(
                       '(${trip.groundTimeHours.toStringAsFixed(1)} hrs)',
-                      style: TextStyle(color: Colors.green.shade700),
+                      style: TextStyle(color: context.successColor),
                     ),
                   ],
                 ),
@@ -300,7 +301,7 @@ class TripCard extends StatelessWidget {
                 padding: const EdgeInsets.only(left: 28),
                 child: Text(
                   '${trip.outboundFlight} • ${trip.outboundDuration} • ${trip.outboundStops == 0 ? 'Nonstop' : '${trip.outboundStops} stop${trip.outboundStops > 1 ? 's' : ''}'}',
-                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                  style: TextStyle(fontSize: 12, color: context.textSecondary),
                 ),
               ),
               const SizedBox(height: 8),
@@ -326,7 +327,7 @@ class TripCard extends StatelessWidget {
                 padding: const EdgeInsets.only(left: 28),
                 child: Text(
                   '${trip.returnFlight} • ${trip.returnDuration} • ${trip.returnStops == 0 ? 'Nonstop' : '${trip.returnStops} stop${trip.returnStops > 1 ? 's' : ''}'}',
-                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                  style: TextStyle(fontSize: 12, color: context.textSecondary),
                 ),
               ),
               const SizedBox(height: 12),
@@ -334,11 +335,11 @@ class TripCard extends StatelessWidget {
               // Total Trip Time
               Row(
                 children: [
-                  Icon(Icons.access_time, size: 16, color: Colors.grey.shade600),
+                  Icon(Icons.access_time, size: 16, color: context.textSecondary),
                   const SizedBox(width: 4),
                   Text(
                     'Total trip time: ${trip.totalTripTime}',
-                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                    style: TextStyle(fontSize: 12, color: context.textSecondary),
                   ),
                   const Spacer(),
                   const Icon(Icons.arrow_forward_ios, size: 16),

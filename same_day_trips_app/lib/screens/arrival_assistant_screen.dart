@@ -4,6 +4,7 @@ import 'package:permission_handler/permission_handler.dart';
 import '../models/trip.dart';
 import '../models/stop.dart';
 import '../services/gemini_service.dart';
+import '../theme/app_colors.dart';
 
 class ArrivalAssistantScreen extends StatefulWidget {
   final Trip trip;
@@ -193,27 +194,27 @@ What would you like to know?''',
             ),
           ],
         ),
-        backgroundColor: Colors.purple,
+        backgroundColor: const Color(0xFF9C27B0),
         foregroundColor: Colors.white,
       ),
       body: Column(
         children: [
           // Trip context banner
           Container(
-            color: Colors.purple.shade50,
+            color: context.purpleTint,
             padding: const EdgeInsets.all(12),
             child: Column(
               children: [
                 Row(
                   children: [
-                    Icon(Icons.flight_land, color: Colors.purple.shade700),
+                    Icon(Icons.flight_land, color: const Color(0xFF9C27B0)),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
                         '${widget.stops.length} stops planned • ${widget.trip.groundTime} available',
-                        style: TextStyle(
+                        style: const TextStyle(
                           fontSize: 13,
-                          color: Colors.purple.shade900,
+                          color: Color(0xFF9C27B0),
                         ),
                       ),
                     ),
@@ -225,7 +226,7 @@ What would you like to know?''',
                     Icon(
                       _locationEnabled ? Icons.my_location : Icons.location_off,
                       size: 16,
-                      color: _locationEnabled ? Colors.green : Colors.grey,
+                      color: _locationEnabled ? context.successColor : context.textSecondary,
                     ),
                     const SizedBox(width: 8),
                     Expanded(
@@ -233,7 +234,7 @@ What would you like to know?''',
                         _locationStatus,
                         style: TextStyle(
                           fontSize: 11,
-                          color: _locationEnabled ? Colors.green.shade900 : Colors.grey.shade700,
+                          color: _locationEnabled ? context.successColor : context.textSecondary,
                         ),
                       ),
                     ),
@@ -269,7 +270,7 @@ What would you like to know?''',
                   const SizedBox(width: 12),
                   Text(
                     'Thinking...',
-                    style: TextStyle(color: Colors.grey.shade600),
+                    style: TextStyle(color: context.textSecondary),
                   ),
                 ],
               ),
@@ -279,10 +280,10 @@ What would you like to know?''',
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: context.surfaceColor,
               boxShadow: [
                 BoxShadow(
-                  color: Colors.grey.shade300,
+                  color: context.borderColor,
                   blurRadius: 4,
                   offset: const Offset(0, -2),
                 ),
@@ -309,7 +310,7 @@ What would you like to know?''',
                 const SizedBox(width: 8),
                 FloatingActionButton(
                   onPressed: () => _sendMessage(_messageController.text),
-                  backgroundColor: Colors.purple,
+                  backgroundColor: const Color(0xFF9C27B0),
                   mini: true,
                   child: const Icon(Icons.send, color: Colors.white),
                 ),
@@ -342,7 +343,7 @@ What would you like to know?''',
             child: ActionChip(
               label: Text(suggestions[index]),
               onPressed: () => _sendMessage(suggestions[index]),
-              backgroundColor: Colors.purple.shade50,
+              backgroundColor: context.purpleTint,
             ),
           );
         },
@@ -360,7 +361,7 @@ What would you like to know?''',
           maxWidth: MediaQuery.of(context).size.width * 0.75,
         ),
         decoration: BoxDecoration(
-          color: message.isUser ? Colors.purple : Colors.grey.shade200,
+          color: message.isUser ? const Color(0xFF9C27B0) : context.surfaceColor.withOpacity(0.5),
           borderRadius: BorderRadius.circular(16),
         ),
         child: Column(
@@ -369,7 +370,7 @@ What would you like to know?''',
             Text(
               message.text,
               style: TextStyle(
-                color: message.isUser ? Colors.white : Colors.black87,
+                color: message.isUser ? Colors.white : context.textPrimary,
               ),
             ),
             if (message.hasMapData)
@@ -381,14 +382,14 @@ What would you like to know?''',
                     Icon(
                       Icons.map,
                       size: 16,
-                      color: message.isUser ? Colors.white70 : Colors.grey,
+                      color: message.isUser ? Colors.white70 : context.textSecondary,
                     ),
                     const SizedBox(width: 4),
                     Text(
                       'Powered by Google Maps',
                       style: TextStyle(
                         fontSize: 10,
-                        color: message.isUser ? Colors.white70 : Colors.grey,
+                        color: message.isUser ? Colors.white70 : context.textSecondary,
                       ),
                     ),
                   ],
@@ -407,7 +408,7 @@ What would you like to know?''',
                           Icon(
                             Icons.location_on,
                             size: 14,
-                            color: message.isUser ? Colors.white : Colors.blue,
+                            color: message.isUser ? Colors.white : context.primaryColor,
                           ),
                           const SizedBox(width: 4),
                           Flexible(
@@ -415,7 +416,7 @@ What would you like to know?''',
                               place.name,
                               style: TextStyle(
                                 fontSize: 12,
-                                color: message.isUser ? Colors.white : Colors.blue,
+                                color: message.isUser ? Colors.white : context.primaryColor,
                                 decoration: TextDecoration.underline,
                               ),
                             ),

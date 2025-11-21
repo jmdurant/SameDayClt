@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- CarPlay Entitlement (Requires Apple Approval) -->
+	<!-- Request approval at: https://developer.apple.com/contact/carplay -->
+	<!-- Once approved, add the entitlement key provided by Apple here -->
+	<!-- Example: com.apple.developer.carplay-audio or com.apple.developer.carplay-navigation -->
+
+	<!-- NOTE: This file is a template. You MUST: -->
+	<!-- 1. Request CarPlay entitlement from Apple -->
+	<!-- 2. Wait for approval (can take days to months) -->
+	<!-- 3. Add the exact entitlement key(s) Apple provides -->
+	<!-- 4. Update your provisioning profile with CarPlay capability -->
+	<!-- 5. Re-sign your app with the updated profile -->
+
+	<!-- Example CarPlay Audio App Entitlement (UNCOMMENT when approved): -->
+	<!--
+	<key>com.apple.developer.carplay-audio</key>
+	<true/>
+	-->
+
+	<!-- Example CarPlay Navigation App Entitlement (UNCOMMENT when approved): -->
+	<!--
+	<key>com.apple.developer.carplay-navigation</key>
+	<true/>
+	-->
+
+	<!-- Example CarPlay Communication App Entitlement (UNCOMMENT when approved): -->
+	<!--
+	<key>com.apple.developer.carplay-communication</key>
+	<true/>
+	-->
+
+	<!-- App Groups (if you need shared data between app and extensions) -->
+	<!--
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.com.samedaytrips.same_day_trips_app</string>
+	</array>
+	-->
+
+	<!-- Associated Domains (for universal links, handoff, etc.) -->
+	<!--
+	<key>com.apple.developer.associated-domains</key>
+	<array>
+		<string>applinks:yourdomain.com</string>
+	</array>
+	-->
+</dict>
+</plist>

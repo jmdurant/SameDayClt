@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 import '../services/api_service.dart';
 import '../models/trip.dart';
 import '../models/stop.dart';
+import '../theme/app_colors.dart';
+import '../theme/theme_provider.dart';
 import 'results_screen.dart';
 import 'voice_assistant_screen.dart';
 import 'saved_agendas_screen.dart';
@@ -88,7 +91,7 @@ class _SearchScreenState extends State<SearchScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Search failed: ${e.toString()}'),
-          backgroundColor: Colors.red,
+          backgroundColor: context.errorColor,
           duration: const Duration(seconds: 5),
         ),
       );
@@ -105,6 +108,17 @@ class _SearchScreenState extends State<SearchScreen> {
       appBar: AppBar(
         title: const Text('Same-Day Business Trips'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+        actions: [
+          IconButton(
+            icon: Icon(
+              context.isDarkMode ? Icons.light_mode : Icons.dark_mode,
+            ),
+            tooltip: context.isDarkMode ? 'Switch to light mode' : 'Switch to dark mode',
+            onPressed: () {
+              Provider.of<ThemeProvider>(context, listen: false).toggleTheme();
+            },
+          ),
+        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
@@ -119,7 +133,7 @@ class _SearchScreenState extends State<SearchScreen> {
                   padding: const EdgeInsets.all(16.0),
                   child: Column(
                     children: [
-                      const Icon(Icons.flight_takeoff, size: 48, color: Colors.blue),
+                      Icon(Icons.flight_takeoff, size: 48, color: context.primaryColor),
                       const SizedBox(height: 8),
                       Text(
                         'Plan Your Day Trip',
@@ -140,7 +154,7 @@ class _SearchScreenState extends State<SearchScreen> {
               // Saved Agendas Button
               Card(
                 elevation: 4,
-                color: Colors.green.shade50,
+                color: context.greenTint,
                 child: InkWell(
                   onTap: () {
                     Navigator.push(
@@ -157,7 +171,7 @@ class _SearchScreenState extends State<SearchScreen> {
                         Container(
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                            color: Colors.green,
+                            color: context.successColor,
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: const Icon(
@@ -171,12 +185,12 @@ class _SearchScreenState extends State<SearchScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text(
+                              Text(
                                 'Saved Agendas',
                                 style: TextStyle(
                                   fontSize: 18,
                                   fontWeight: FontWeight.bold,
-                                  color: Colors.green,
+                                  color: context.successColor,
                                 ),
                               ),
                               const SizedBox(height: 4),
@@ -184,15 +198,15 @@ class _SearchScreenState extends State<SearchScreen> {
                                 'View your saved trip agendas',
                                 style: TextStyle(
                                   fontSize: 14,
-                                  color: Colors.grey.shade700,
+                                  color: context.textSecondary,
                                 ),
                               ),
                             ],
                           ),
                         ),
-                        const Icon(
+                        Icon(
                           Icons.arrow_forward_ios,
-                          color: Colors.green,
+                          color: context.successColor,
                         ),
                       ],
                     ),
@@ -204,7 +218,7 @@ class _SearchScreenState extends State<SearchScreen> {
               // Voice Assistant Quick Access Button
               Card(
                 elevation: 4,
-                color: Colors.blue.shade50,
+                color: context.blueTint,
                 child: InkWell(
                   onTap: () {
                     // Create a minimal mock trip for today with no specific destination
@@ -230,7 +244,7 @@ class _SearchScreenState extends State<SearchScreen> {
                       totalFlightCost: 0.0,
                       totalTripTime: '',
                     );
-                    
+
                     Navigator.push(
                       context,
                       MaterialPageRoute(
@@ -248,7 +262,7 @@ class _SearchScreenState extends State<SearchScreen> {
                         Container(
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                            color: Colors.blue,
+                            color: context.primaryColor,
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: const Icon(
@@ -262,12 +276,12 @@ class _SearchScreenState extends State<SearchScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text(
+                              Text(
                                 'Voice Assistant',
                                 style: TextStyle(
                                   fontSize: 18,
                                   fontWeight: FontWeight.bold,
-                                  color: Colors.blue,
+                                  color: context.primaryColor,
                                 ),
                               ),
                               const SizedBox(height: 4),
@@ -275,15 +289,15 @@ class _SearchScreenState extends State<SearchScreen> {
                                 'Ask about weather, traffic, calendar, or plan your day',
                                 style: TextStyle(
                                   fontSize: 14,
-                                  color: Colors.grey.shade700,
+                                  color: context.textSecondary,
                                 ),
                               ),
                             ],
                           ),
                         ),
-                        const Icon(
+                        Icon(
                           Icons.arrow_forward_ios,
-                          color: Colors.blue,
+                          color: context.primaryColor,
                         ),
                       ],
                     ),
@@ -506,18 +520,18 @@ class _SearchScreenState extends State<SearchScreen> {
 
               // Info Card
               Card(
-                color: Colors.blue.shade50,
+                color: context.blueTint,
                 child: Padding(
                   padding: const EdgeInsets.all(12.0),
                   child: Row(
                     children: [
-                      Icon(Icons.info_outline, color: Colors.blue.shade700),
+                      Icon(Icons.info_outline, color: context.primaryColor),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
                           'Search may take 30-60 seconds as we check real-time flight availability',
                           style: TextStyle(
-                            color: Colors.blue.shade700,
+                            color: context.primaryColor,
                             fontSize: 12,
                           ),
                         ),

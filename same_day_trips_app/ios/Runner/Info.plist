@@ -50,5 +50,51 @@
 	<string>We need your location to provide personalized recommendations near you during your trip.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>We need your location to provide personalized recommendations during your trip.</string>
+
+	<!-- Microphone permission for voice assistant -->
+	<key>NSMicrophoneUsageDescription</key>
+	<string>We need microphone access for the voice assistant feature.</string>
+
+	<!-- Camera permission for WebRTC -->
+	<key>NSCameraUsageDescription</key>
+	<string>We need camera access for video features in the voice assistant.</string>
+
+	<!-- Calendar permissions -->
+	<key>NSCalendarsUsageDescription</key>
+	<string>We need calendar access to sync your meetings with your trip itinerary.</string>
+
+	<!-- CarPlay Scene Configuration -->
+	<key>UIApplicationSceneManifest</key>
+	<dict>
+		<key>UIApplicationSupportsMultipleScenes</key>
+		<false/>
+		<key>UISceneConfigurations</key>
+		<dict>
+			<!-- CarPlay Scene Configuration -->
+			<key>CPTemplateApplicationSceneSessionRoleApplication</key>
+			<array>
+				<dict>
+					<key>UISceneClassName</key>
+					<string>CPTemplateApplicationScene</string>
+					<key>UISceneConfigurationName</key>
+					<string>CarPlay Configuration</string>
+					<key>UISceneDelegateClassName</key>
+					<string>flutter_carplay.FlutterCarPlaySceneDelegate</string>
+				</dict>
+			</array>
+			<!-- Standard iOS App Scene Configuration -->
+			<key>UIWindowSceneSessionRoleApplication</key>
+			<array>
+				<dict>
+					<key>UISceneClassName</key>
+					<string>UIWindowScene</string>
+					<key>UISceneConfigurationName</key>
+					<string>Default Configuration</string>
+					<key>UISceneDelegateClassName</key>
+					<string>$(PRODUCT_MODULE_NAME).SceneDelegate</string>
+				</dict>
+			</array>
+		</dict>
+	</dict>
 </dict>
 </plist>

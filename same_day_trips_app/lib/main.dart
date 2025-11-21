@@ -3,8 +3,11 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:provider/provider.dart';
 import 'screens/search_screen.dart';
 import 'car/car_controller.dart';
+import 'theme/theme_data.dart';
+import 'theme/theme_provider.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -52,7 +55,12 @@ Future<void> main() async {
     }
   }
 
-  runApp(const SameDayTripsApp());
+  runApp(
+    ChangeNotifierProvider(
+      create: (_) => ThemeProvider(),
+      child: const SameDayTripsApp(),
+    ),
+  );
 }
 
 class SameDayTripsApp extends StatefulWidget {
@@ -98,14 +106,17 @@ class _SameDayTripsAppState extends State<SameDayTripsApp> {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Same-Day Trips Finder',
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
-        useMaterial3: true,
-      ),
-      home: const SearchScreen(),
-      debugShowCheckedModeBanner: false,
+    return Consumer<ThemeProvider>(
+      builder: (context, themeProvider, child) {
+        return MaterialApp(
+          title: 'Same-Day Trips Finder',
+          theme: AppTheme.lightTheme(),
+          darkTheme: AppTheme.darkTheme(),
+          themeMode: themeProvider.themeMode,
+          home: const SearchScreen(),
+          debugShowCheckedModeBanner: false,
+        );
+      },
     );
   }
 }

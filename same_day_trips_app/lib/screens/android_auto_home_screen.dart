@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import '../models/trip.dart';
 import '../models/stop.dart';
+import '../theme/app_colors.dart';
 import 'voice_assistant_screen.dart';
 
 class AndroidAutoHomeScreen extends StatefulWidget {
@@ -83,12 +84,18 @@ class _AndroidAutoHomeScreenState extends State<AndroidAutoHomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Android Auto uses dark theme but should respect system theme
+    final backgroundColor = context.isDarkMode
+        ? Colors.black
+        : Theme.of(context).colorScheme.background;
+    final progressColor = context.textPrimary;
+
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: backgroundColor,
       body: SafeArea(
         child: _isLoading
-            ? const Center(
-                child: CircularProgressIndicator(color: Colors.white),
+            ? Center(
+                child: CircularProgressIndicator(color: progressColor),
               )
             : _activeTrip == null
                 ? _buildNoTripView()
@@ -98,29 +105,33 @@ class _AndroidAutoHomeScreenState extends State<AndroidAutoHomeScreen> {
   }
 
   Widget _buildNoTripView() {
+    final iconColor = context.textSecondary;
+    final titleColor = context.textPrimary;
+    final subtitleColor = context.textSecondary;
+
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(
+          Icon(
             Icons.flight_takeoff,
             size: 80,
-            color: Colors.white54,
+            color: iconColor,
           ),
           const SizedBox(height: 24),
-          const Text(
+          Text(
             'No active trip today',
             style: TextStyle(
-              color: Colors.white,
+              color: titleColor,
               fontSize: 24,
               fontWeight: FontWeight.bold,
             ),
           ),
           const SizedBox(height: 12),
-          const Text(
+          Text(
             'Plan a trip to get started',
             style: TextStyle(
-              color: Colors.white54,
+              color: subtitleColor,
               fontSize: 16,
             ),
           ),
@@ -130,6 +141,14 @@ class _AndroidAutoHomeScreenState extends State<AndroidAutoHomeScreen> {
   }
 
   Widget _buildTripView() {
+    final headerIconColor = context.textPrimary;
+    final headerTextColor = context.textPrimary;
+    final buttonBackgroundColor = context.infoColor;
+    final buttonTextColor = context.isDarkMode
+        ? AppColors.textPrimaryDark
+        : AppColors.textPrimaryLight;
+    final launchingTextColor = context.textSecondary;
+
     return Padding(
       padding: const EdgeInsets.all(24.0),
       child: Column(
@@ -138,16 +157,16 @@ class _AndroidAutoHomeScreenState extends State<AndroidAutoHomeScreen> {
           // Header
           Row(
             children: [
-              const Icon(
+              Icon(
                 Icons.flight_takeoff,
                 size: 32,
-                color: Colors.white,
+                color: headerIconColor,
               ),
               const SizedBox(width: 12),
               Text(
                 'Trip to ${_activeTrip!.city}',
-                style: const TextStyle(
-                  color: Colors.white,
+                style: TextStyle(
+                  color: headerTextColor,
                   fontSize: 28,
                   fontWeight: FontWeight.bold,
                 ),
@@ -187,8 +206,8 @@ class _AndroidAutoHomeScreenState extends State<AndroidAutoHomeScreen> {
                 style: TextStyle(fontSize: 20),
               ),
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue,
-                foregroundColor: Colors.white,
+                backgroundColor: buttonBackgroundColor,
+                foregroundColor: buttonTextColor,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
@@ -196,11 +215,11 @@ class _AndroidAutoHomeScreenState extends State<AndroidAutoHomeScreen> {
             ),
           ),
           const SizedBox(height: 12),
-          const Center(
+          Center(
             child: Text(
               'Launching automatically...',
               style: TextStyle(
-                color: Colors.white54,
+                color: launchingTextColor,
                 fontSize: 14,
               ),
             ),
@@ -217,15 +236,24 @@ class _AndroidAutoHomeScreenState extends State<AndroidAutoHomeScreen> {
     String arrival,
     IconData icon,
   ) {
+    // High contrast colors for Android Auto display requirements
+    final cardBackgroundColor = context.isDarkMode
+        ? Colors.white.withOpacity(0.12)
+        : Theme.of(context).colorScheme.surface;
+    final iconColor = context.textPrimary;
+    final labelColor = context.textSecondary;
+    final flightNumberColor = context.textPrimary;
+    final timesColor = context.textPrimary;
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white12,
+        color: cardBackgroundColor,
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
         children: [
-          Icon(icon, color: Colors.white, size: 32),
+          Icon(icon, color: iconColor, size: 32),
           const SizedBox(width: 16),
           Expanded(
             child: Column(
@@ -233,16 +261,16 @@ class _AndroidAutoHomeScreenState extends State<AndroidAutoHomeScreen> {
               children: [
                 Text(
                   label,
-                  style: const TextStyle(
-                    color: Colors.white54,
+                  style: TextStyle(
+                    color: labelColor,
                     fontSize: 14,
                   ),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   flightNumber,
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: TextStyle(
+                    color: flightNumberColor,
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
                   ),
@@ -250,8 +278,8 @@ class _AndroidAutoHomeScreenState extends State<AndroidAutoHomeScreen> {
                 const SizedBox(height: 8),
                 Text(
                   '$departure → $arrival',
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: TextStyle(
+                    color: timesColor,
                     fontSize: 16,
                   ),
                 ),

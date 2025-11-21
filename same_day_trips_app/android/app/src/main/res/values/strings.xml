@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- App name displayed in Android Auto -->
+    <string name="app_name">Same-Day Trips</string>
+
+    <!-- Android Auto service name -->
+    <string name="car_app_service">Same-Day Trips for Android Auto</string>
+</resources>

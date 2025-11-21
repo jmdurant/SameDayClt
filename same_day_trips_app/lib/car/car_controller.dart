@@ -8,6 +8,8 @@ import '../models/stop.dart';
 class CarController {
   static final CarController _instance = CarController._internal();
   FlutterAndroidAuto? _androidAuto;
+  final FlutterCarplay _flutterCarplay = FlutterCarplay();
+  bool _isConnected = false;
 
   factory CarController() {
     return _instance;
@@ -25,6 +27,19 @@ class CarController {
 
     // CarPlay (iOS)
     try {
+      // Add connection status listener
+      _flutterCarplay.addListenerOnConnectionChange((ConnectionStatusTypes status) {
+        _isConnected = status == ConnectionStatusTypes.connected;
+        print('🚗 CarPlay connection status: $status');
+
+        if (status == ConnectionStatusTypes.connected) {
+          print('✅ CarPlay connected - initializing interface');
+        } else if (status == ConnectionStatusTypes.background) {
+          print('⏸️ CarPlay in background');
+        } else if (status == ConnectionStatusTypes.disconnected) {
+          print('❌ CarPlay disconnected');
+        }
+      });
 
     FlutterCarplay.setRootTemplate(
       rootTemplate: CPListTemplate(
@@ -64,9 +79,15 @@ class CarController {
       ),
       animated: true,
     );
+
+      // Force update to ensure root template is properly set
+      // This is a best practice from flutter_carplay documentation
+      _flutterCarplay.forceUpdateRootTemplate();
+
+      print('✅ CarPlay initialized successfully');
     } catch (e) {
       // Silently skip on platforms without CarPlay
-      print('CarPlay not available: $e');
+      print('⚠️ CarPlay not available: $e');
     }
   }
 
@@ -220,41 +241,49 @@ class CarController {
   }
 
   void _setAndroidMenu() {
-    final menuTemplate = AAListTemplate(
-      title: "Same-Day Trips",
-      sections: [
-        AAListSection(
-          title: "Menu",
-          items: [
-            AAListItem(
-              title: "Same-Day Trips",
-              subtitle: "Find trips from your location",
-              onPress: (complete, self) {
-                complete();
-              },
-            ),
-            AAListItem(
-              title: "Saved Trips",
-              subtitle: "View your planned itineraries",
-              onPress: (complete, self) {
-                complete();
-              },
-            ),
-            AAListItem(
-              title: "Demo Agenda: NYC Day Trip",
-              subtitle: "Tap to view itinerary",
-              onPress: (complete, self) {
-                _showDemoAgenda();
-                complete();
-              },
-            ),
-          ],
-        ),
-      ],
-    );
+    try {
+      final menuTemplate = AAListTemplate(
+        title: "Same-Day Trips",
+        sections: [
+          AAListSection(
+            title: "Menu",
+            items: [
+              AAListItem(
+                title: "Same-Day Trips",
+                subtitle: "Find trips from your location",
+                onPress: (complete, self) {
+                  complete();
+                },
+              ),
+              AAListItem(
+                title: "Saved Trips",
+                subtitle: "View your planned itineraries",
+                onPress: (complete, self) {
+                  complete();
+                },
+              ),
+              AAListItem(
+                title: "Demo Agenda: NYC Day Trip",
+                subtitle: "Tap to view itinerary",
+                onPress: (complete, self) {
+                  _showDemoAgenda();
+                  complete();
+                },
+              ),
+            ],
+          ),
+        ],
+      );
 
-    FlutterAndroidAuto.setRootTemplate(template: menuTemplate);
+      FlutterAndroidAuto.setRootTemplate(template: menuTemplate);
+      print('✅ Android Auto menu initialized successfully');
+    } catch (e) {
+      print('⚠️ Android Auto menu initialization failed: $e');
+    }
   }
+
+  /// Check if CarPlay is currently connected
+  bool get isCarPlayConnected => _isConnected;
 
   void _setAndroidAgenda(TripAgenda agenda) {
     final section = AAListSection(

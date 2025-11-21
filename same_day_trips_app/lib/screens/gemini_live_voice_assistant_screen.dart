@@ -12,6 +12,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 import '../models/trip.dart';
 import '../models/stop.dart';
+import '../theme/app_colors.dart';
 
 class GeminiLiveVoiceAssistantScreen extends StatefulWidget {
   final Trip trip;
@@ -504,7 +505,7 @@ class _GeminiLiveVoiceAssistantScreenState extends State<GeminiLiveVoiceAssistan
             icon: Icon(
               _isRecording ? Icons.stop_circle_outlined : Icons.mic_none_outlined,
             ),
-            color: _isRecording ? Colors.red : Theme.of(context).iconTheme.color,
+            color: _isRecording ? context.errorColor : Theme.of(context).iconTheme.color,
             onPressed: _toggleRecording,
           ),
           // The main text input field.
@@ -566,7 +567,7 @@ class _GeminiLiveVoiceAssistantScreenState extends State<GeminiLiveVoiceAssistan
           IconButton(
             icon: Icon(
               _locationPermissionGranted ? Icons.my_location : Icons.location_disabled,
-              color: _locationPermissionGranted ? Colors.blue : Colors.grey,
+              color: _locationPermissionGranted ? context.infoColor : context.textSecondary,
             ),
             onPressed: _initializeLocation,
             tooltip: 'Refresh Location',
@@ -577,10 +578,10 @@ class _GeminiLiveVoiceAssistantScreenState extends State<GeminiLiveVoiceAssistan
             child: Icon(
               Icons.circle,
               color: _connectionStatus == ConnectionStatus.connected
-                  ? Colors.green
+                  ? context.successColor
                   : _connectionStatus == ConnectionStatus.connecting
-                  ? Colors.orange
-                  : Colors.red,
+                  ? context.warningColor
+                  : context.errorColor,
               size: 16,
             ),
           ),
@@ -607,10 +608,10 @@ class _GeminiLiveVoiceAssistantScreenState extends State<GeminiLiveVoiceAssistan
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(8),
-            color: Colors.grey[100],
+            color: context.surfaceColor,
             child: Text(
               _statusText,
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: context.textPrimary),
               textAlign: TextAlign.center,
             ),
           ),

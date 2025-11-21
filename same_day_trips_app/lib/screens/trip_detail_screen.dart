@@ -10,6 +10,7 @@ import '../services/saved_trips_service.dart';
 import 'arrival_assistant_screen.dart';
 import 'voice_assistant_screen.dart';
 import '../car/car_controller.dart';
+import '../theme/app_colors.dart';
 
 class TripDetailScreen extends StatefulWidget {
   final Trip trip;
@@ -250,7 +251,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
           children: [
             Text(
               'Save this trip to your agendas?',
-              style: TextStyle(color: Colors.grey.shade700),
+              style: TextStyle(color: context.textSecondary),
             ),
             const SizedBox(height: 16),
             TextField(
@@ -274,7 +275,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
             icon: const Icon(Icons.bookmark),
             label: const Text('Save'),
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.blue,
+              backgroundColor: context.primaryColor,
               foregroundColor: Colors.white,
             ),
           ),
@@ -301,7 +302,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                 ? 'Trip saved to your agendas!'
                 : 'Failed to save trip. Please try again.',
           ),
-          backgroundColor: success ? Colors.green : Colors.red,
+          backgroundColor: success ? context.successColor : context.errorColor,
           duration: const Duration(seconds: 3),
         ),
       );
@@ -319,7 +320,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
         onPressed: _saveTrip,
         icon: const Icon(Icons.bookmark),
         label: const Text('Save Trip'),
-        backgroundColor: Colors.blue,
+        backgroundColor: context.primaryColor,
         foregroundColor: Colors.white,
       ),
       body: SingleChildScrollView(
@@ -338,7 +339,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                         Container(
                           padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(
-                            color: Colors.blue,
+                            color: context.primaryColor,
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Text(
@@ -362,7 +363,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                               Text(
                                 widget.trip.date,
                                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                      color: Colors.grey.shade600,
+                                      color: context.textSecondary,
                                     ),
                               ),
                             ],
@@ -378,13 +379,13 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                           icon: Icons.schedule,
                           label: 'Meeting Time',
                           value: widget.trip.groundTime,
-                          color: Colors.green,
+                          color: context.successColor,
                         ),
                         _InfoChip(
                           icon: Icons.attach_money,
                           label: 'Flight Cost',
                           value: '\$${widget.trip.totalFlightCost.toStringAsFixed(0)}',
-                          color: Colors.blue,
+                          color: context.primaryColor,
                         ),
                       ],
                     ),
@@ -413,7 +414,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                     icon: const Icon(Icons.chat),
                     label: const Text('Text Chat'),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.purple,
+                      backgroundColor: const Color(0xFF9C27B0),
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.all(16),
                     ),
@@ -438,7 +439,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                     icon: const Icon(Icons.mic),
                     label: const Text('Voice Mode'),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.deepPurple,
+                      backgroundColor: const Color(0xFF673AB7),
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.all(16),
                     ),
@@ -469,7 +470,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
 
             // Ground Time
             Card(
-              color: Colors.green.shade50,
+              color: context.greenTint,
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Row(
@@ -477,7 +478,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: Colors.green,
+                        color: context.successColor,
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: const Icon(Icons.location_city, color: Colors.white),
@@ -494,14 +495,14 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                           Text(
                             widget.trip.groundTime,
                             style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                                  color: Colors.green.shade700,
+                                  color: context.successColor,
                                 ),
                           ),
                           Text(
                             '${widget.trip.groundTimeHours.toStringAsFixed(1)} hours for meetings',
                             style: TextStyle(
                               fontSize: 12,
-                              color: Colors.grey.shade700,
+                              color: context.textSecondary,
                             ),
                           ),
                         ],
@@ -528,16 +529,16 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                     if (_stops.isEmpty)
                       Column(
                         children: [
-                          Icon(Icons.location_on_outlined, size: 48, color: Colors.grey.shade400),
+                          Icon(Icons.location_on_outlined, size: 48, color: context.borderColor),
                           const SizedBox(height: 8),
                           Text(
                             'No stops added yet',
-                            style: TextStyle(color: Colors.grey.shade600),
+                            style: TextStyle(color: context.textSecondary),
                           ),
                           const SizedBox(height: 4),
                           Text(
                             'Add meetings or appointments during your trip',
-                            style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+                            style: TextStyle(fontSize: 12, color: context.textSecondary),
                             textAlign: TextAlign.center,
                           ),
                         ],
@@ -554,7 +555,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                                 width: 32,
                                 height: 32,
                                 decoration: BoxDecoration(
-                                  color: Colors.blue,
+                                  color: context.primaryColor,
                                   borderRadius: BorderRadius.circular(16),
                                 ),
                                 child: Center(
@@ -581,31 +582,23 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                               'Starts ${DateFormat('h:mm a').format(stop.startTime!)}',
                               style: TextStyle(
                                 fontSize: 12,
-                                color: Colors.blue.shade700,
-                            ),
-                          ),
-                          if (stop.startTime != null)
-                            Text(
-                              'Starts ${DateFormat('h:mm a').format(stop.startTime!)}',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.blue.shade700,
+                                color: context.primaryColor,
                               ),
                             ),
                           Text(
                             stop.address,
                             style: TextStyle(
                               fontSize: 12,
-                              color: Colors.grey.shade600,
-                                      ),
-                                    ),
-                                    Text(
-                                      '${stop.formatDuration()} planned',
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: Colors.blue.shade700,
-                                      ),
-                                    ),
+                              color: context.textSecondary,
+                            ),
+                          ),
+                          Text(
+                            '${stop.formatDuration()} planned',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: context.primaryColor,
+                            ),
+                          ),
                                   ],
                                 ),
                               ),
@@ -613,11 +606,11 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                                 icon: const Icon(Icons.delete_outline),
                                 onPressed: () {
                                   setState(() {
-                            _stops.removeAt(index);
-                          });
-                        },
-                        color: Colors.red,
-                      ),
+                                    _stops.removeAt(index);
+                                  });
+                                },
+                                color: context.errorColor,
+                              ),
                     ],
                   ),
                 );
@@ -628,14 +621,14 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
               icon: const Icon(Icons.add_location),
               label: Text(_stops.isEmpty ? 'Add Stop' : 'Add Another Stop'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue,
+                backgroundColor: context.primaryColor,
                 foregroundColor: Colors.white,
               ),
             ),
             const SizedBox(height: 8),
             if (_isLoadingCalendar)
-              Row(
-                children: const [
+              const Row(
+                children: [
                   SizedBox(
                     width: 18,
                     height: 18,
@@ -648,12 +641,12 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
             if (_calendarError != null && !_isLoadingCalendar)
               Text(
                 _calendarError!,
-                style: TextStyle(color: Colors.red.shade700, fontSize: 12),
+                style: TextStyle(color: context.errorColor, fontSize: 12),
               ),
             if (!_isLoadingCalendar && _calendarError == null)
               Text(
                 'Calendar events for this date are included automatically.',
-                style: TextStyle(color: Colors.grey.shade700, fontSize: 12),
+                style: TextStyle(color: context.textSecondary, fontSize: 12),
               ),
             const SizedBox(height: 8),
             ElevatedButton.icon(
@@ -662,26 +655,26 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                   ? const SizedBox(
                       width: 18,
                       height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                            )
-                          : const Icon(Icons.route),
-                      label: Text(_isPlanningRoute ? 'Planning...' : 'Plan the Day'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green,
-                        foregroundColor: Colors.white,
-                      ),
-                    ),
-                    if (_routeError != null) ...[
-                      const SizedBox(height: 8),
-                      Text(
-                        _routeError!,
-                        style: TextStyle(color: Colors.red.shade700, fontSize: 12),
-                      ),
-                    ],
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    )
+                  : const Icon(Icons.route),
+              label: Text(_isPlanningRoute ? 'Planning...' : 'Plan the Day'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: context.successColor,
+                foregroundColor: Colors.white,
+              ),
+            ),
+            if (_routeError != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                _routeError!,
+                style: TextStyle(color: context.errorColor, fontSize: 12),
+              ),
+            ],
                     if (_plannedRoute != null) ...[
                       const SizedBox(height: 12),
                       Card(
-                        color: Colors.green.shade50,
+                        color: context.greenTint,
                         child: Padding(
                           padding: const EdgeInsets.all(12),
                           child: Column(
@@ -689,19 +682,19 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                             children: [
                               Row(
                                 children: [
-                                  const Icon(Icons.directions, color: Colors.green),
+                                  Icon(Icons.directions, color: context.successColor),
                                   const SizedBox(width: 8),
                                   Text(
                                     'Optimized Route',
                                     style: TextStyle(
-                                      color: Colors.green.shade800,
+                                      color: context.successColor,
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),
                                   const Spacer(),
                                   Text(
                                     '${_plannedRoute!.formatDuration(_plannedRoute!.totalDrivingMinutes * 60)} driving',
-                                    style: TextStyle(color: Colors.green.shade800),
+                                    style: TextStyle(color: context.successColor),
                                   ),
                                 ],
                               ),
@@ -757,7 +750,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
 
             // Total Summary
             Card(
-              color: Colors.blue.shade50,
+              color: context.blueTint,
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(
@@ -776,10 +769,10 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                         const Text('Total Flight Cost:', style: TextStyle(fontWeight: FontWeight.bold)),
                         Text(
                           '\$${widget.trip.totalFlightCost.toStringAsFixed(2)}',
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
-                            color: Colors.green,
+                            color: context.successColor,
                           ),
                         ),
                       ],
@@ -801,21 +794,21 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                 _BookingButton(
                   label: 'Search on Google Flights',
                   icon: Icons.search,
-                  color: Colors.blue,
+                  color: context.primaryColor,
                   onPressed: () => _launchUrl(widget.trip.googleFlightsUrl),
                 ),
               if (widget.trip.kayakUrl != null)
                 _BookingButton(
                   label: 'Compare on Kayak',
                   icon: Icons.compare_arrows,
-                  color: Colors.orange,
+                  color: context.warningColor,
                   onPressed: () => _launchUrl(widget.trip.kayakUrl),
                 ),
               if (widget.trip.airlineUrl != null)
                 _BookingButton(
                   label: 'Search AA Award Flights',
                   icon: Icons.card_giftcard,
-                  color: Colors.red,
+                  color: context.errorColor,
                   onPressed: () => _launchUrl(widget.trip.airlineUrl),
                 ),
               const SizedBox(height: 24),
@@ -851,7 +844,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                                 if (widget.trip.turoVehicle != null)
                                   Text(
                                     widget.trip.turoVehicle!,
-                                    style: TextStyle(color: Colors.grey.shade600),
+                                    style: TextStyle(color: context.textSecondary),
                                   ),
                               ],
                             ),
@@ -862,7 +855,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                       ElevatedButton(
                         onPressed: () => _launchUrl(widget.trip.turoSearchUrl),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.purple,
+                          backgroundColor: const Color(0xFF9C27B0),
                           foregroundColor: Colors.white,
                         ),
                         child: const Text('Browse Cars on Turo'),
@@ -876,7 +869,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
 
             // Tips
             Card(
-              color: Colors.amber.shade50,
+              color: context.orangeTint,
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(
@@ -884,13 +877,13 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                   children: [
                     Row(
                       children: [
-                        Icon(Icons.lightbulb_outline, color: Colors.amber.shade700),
+                        Icon(Icons.lightbulb_outline, color: context.warningColor),
                         const SizedBox(width: 8),
                         Text(
                           'Travel Tips',
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
-                            color: Colors.amber.shade900,
+                            color: context.warningColor,
                           ),
                         ),
                       ],
@@ -933,7 +926,7 @@ class _InfoChip extends StatelessWidget {
         const SizedBox(height: 4),
         Text(
           label,
-          style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+          style: TextStyle(fontSize: 12, color: context.textSecondary),
         ),
         Text(
           value,
@@ -977,7 +970,7 @@ class _FlightCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                Icon(icon, color: Colors.blue),
+                Icon(icon, color: context.primaryColor),
                 const SizedBox(width: 8),
                 Text(
                   title,
@@ -993,7 +986,7 @@ class _FlightCard extends StatelessWidget {
             Text(
               flightNumber,
               style: TextStyle(
-                color: Colors.grey.shade700,
+                color: context.textSecondary,
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -1015,7 +1008,7 @@ class _FlightCard extends StatelessWidget {
                     ],
                   ),
                 ),
-                Icon(Icons.arrow_forward, color: Colors.grey.shade400),
+                Icon(Icons.arrow_forward, color: context.borderColor),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.end,
@@ -1036,23 +1029,23 @@ class _FlightCard extends StatelessWidget {
             const SizedBox(height: 8),
             Row(
               children: [
-                Icon(Icons.access_time, size: 16, color: Colors.grey.shade600),
+                Icon(Icons.access_time, size: 16, color: context.textSecondary),
                 const SizedBox(width: 4),
                 Text(
                   duration,
-                  style: TextStyle(color: Colors.grey.shade600),
+                  style: TextStyle(color: context.textSecondary),
                 ),
                 const SizedBox(width: 16),
                 Icon(
                   stops == 0 ? Icons.check_circle : Icons.swap_horiz,
                   size: 16,
-                  color: stops == 0 ? Colors.green : Colors.orange,
+                  color: stops == 0 ? context.successColor : context.warningColor,
                 ),
                 const SizedBox(width: 4),
                 Text(
                   stops == 0 ? 'Nonstop' : '$stops stop${stops > 1 ? 's' : ''}',
                   style: TextStyle(
-                    color: stops == 0 ? Colors.green : Colors.orange,
+                    color: stops == 0 ? context.successColor : context.warningColor,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -1216,7 +1209,7 @@ class _AddStopDialogState extends State<AddStopDialog> {
                   padding: const EdgeInsets.only(top: 8),
                   child: Text(
                     _errorMessage!,
-                    style: const TextStyle(color: Colors.red, fontSize: 12),
+                    style: TextStyle(color: context.errorColor, fontSize: 12),
                   ),
                 ),
 
@@ -1226,7 +1219,7 @@ class _AddStopDialogState extends State<AddStopDialog> {
                   margin: const EdgeInsets.only(top: 8),
                   constraints: const BoxConstraints(maxHeight: 200),
                   decoration: BoxDecoration(
-                    border: Border.all(color: Colors.grey.shade300),
+                    border: Border.all(color: context.borderColor),
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: ListView.builder(
@@ -1253,13 +1246,13 @@ class _AddStopDialogState extends State<AddStopDialog> {
                   margin: const EdgeInsets.only(top: 8),
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.green.shade50,
+                    color: context.successTint,
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.green.shade300),
+                    border: Border.all(color: context.successColor),
                   ),
                   child: Row(
                     children: [
-                      Icon(Icons.check_circle, color: Colors.green.shade700),
+                      Icon(Icons.check_circle, color: context.successColor),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Column(
@@ -1337,7 +1330,7 @@ class _AddStopDialogState extends State<AddStopDialog> {
                   Navigator.pop(context, stop);
                 },
           style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.blue,
+            backgroundColor: context.primaryColor,
             foregroundColor: Colors.white,
           ),
           child: const Text('Add Stop'),
