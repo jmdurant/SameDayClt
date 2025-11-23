@@ -235,7 +235,6 @@ class _RouteViewerScreenState extends State<RouteViewerScreen> {
           headingRowColor: MaterialStateProperty.all(context.blueTint),
           columnSpacing: 16,
           columns: [
-            const DataColumn(label: Text('Select')),
             const DataColumn(label: Text('Flight')),
             ...List.generate(7, (i) {
               final date = widget.weekStart.add(Duration(days: i));
@@ -286,36 +285,22 @@ class _RouteViewerScreenState extends State<RouteViewerScreen> {
 
       // Get a representative flight for pricing (use first available day)
       final firstFlight = flightDays.values.first;
-      final isSelected = isOutbound
-          ? _selectedOutbound?.flightNumber == flightNumber
-          : _selectedReturn?.flightNumber == flightNumber;
+      final rowSelected = isOutbound
+          ? flightDays.values.any((f) =>
+              _selectedOutbound?.flightNumber == f.flightNumber &&
+              _selectedOutbound?.date == f.date)
+          : flightDays.values.any((f) =>
+              _selectedReturn?.flightNumber == f.flightNumber &&
+              _selectedReturn?.date == f.date);
 
       rows.add(
         DataRow(
-          selected: isSelected,
+          selected: rowSelected,
           color: MaterialStateProperty.resolveWith((states) {
-            if (isSelected) return context.successColor.withOpacity(0.2);
+            if (rowSelected) return context.successColor.withOpacity(0.2);
             return null;
           }),
           cells: [
-            // Select radio button
-            DataCell(
-              Radio<String>(
-                value: flightNumber,
-                groupValue: isOutbound
-                    ? _selectedOutbound?.flightNumber
-                    : _selectedReturn?.flightNumber,
-                onChanged: (value) {
-                  setState(() {
-                    if (isOutbound) {
-                      _selectedOutbound = firstFlight;
-                    } else {
-                      _selectedReturn = firstFlight;
-                    }
-                  });
-                },
-              ),
-            ),
             // Flight number
             DataCell(Text(
               flightNumber,
@@ -330,6 +315,11 @@ class _RouteViewerScreenState extends State<RouteViewerScreen> {
 
               // Extract time from ISO timestamp
               final time = _extractTime(flight.departTime);
+              final cellSelected = isOutbound
+                  ? (_selectedOutbound?.flightNumber == flight.flightNumber &&
+                      _selectedOutbound?.date == flight.date)
+                  : (_selectedReturn?.flightNumber == flight.flightNumber &&
+                      _selectedReturn?.date == flight.date);
               return DataCell(
                 GestureDetector(
                   onTap: () {
@@ -349,7 +339,8 @@ class _RouteViewerScreenState extends State<RouteViewerScreen> {
                         time,
                         style: TextStyle(
                           fontSize: 12,
-                          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                          fontWeight: cellSelected ? FontWeight.bold : FontWeight.normal,
+                          color: cellSelected ? context.successColor : null,
                         ),
                       ),
                       if (flight.numStops > 0)
