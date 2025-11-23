@@ -127,6 +127,16 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
     );
   }
 
+  String _buildGoogleFlightsUrl(String origin, String dest, String date) {
+    final query = '$origin to $dest on $date return $date for 1 adult';
+    final encoded = Uri.encodeComponent(query);
+    return 'https://www.google.com/travel/flights?q=$encoded';
+  }
+
+  String _buildKayakUrl(String origin, String dest, String date) {
+    return 'https://www.kayak.com/flights/$origin-$dest/$date/$date';
+  }
+
   Future<void> _loadCalendarStops() async {
     DateTime? tripDate;
     try {
@@ -868,6 +878,8 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
   Widget build(BuildContext context) {
     final smartAirlineUrl = _buildAirlineBookingUrl();
     final smartAirlineCode = _extractCarrierCode(widget.trip.outboundFlight);
+    final googleUrl = widget.trip.googleFlightsUrl ?? _buildGoogleFlightsUrl(widget.trip.origin, widget.trip.destination, widget.trip.date);
+    final kayakUrl = widget.trip.kayakUrl ?? _buildKayakUrl(widget.trip.origin, widget.trip.destination, widget.trip.date);
 
     return Scaffold(
       appBar: AppBar(
@@ -1455,8 +1467,8 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
 
             // Booking Links
             if (smartAirlineUrl != null ||
-                widget.trip.googleFlightsUrl != null ||
-                widget.trip.kayakUrl != null ||
+                googleUrl != null ||
+                kayakUrl != null ||
                 (smartAirlineCode == 'AA' && widget.trip.airlineUrl != null)) ...[
               Text(
                 'Book Your Flights',
@@ -1470,19 +1482,19 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                   color: context.successColor,
                   onPressed: () => _openAirlineWebView(smartAirlineUrl, title: 'Book ${widget.trip.outboundFlight}'),
                 ),
-              if (widget.trip.googleFlightsUrl != null)
+              if (googleUrl != null)
                 _BookingButton(
                   label: 'Search on Google Flights',
                   icon: Icons.search,
                   color: context.primaryColor,
-                  onPressed: () => _launchUrl(widget.trip.googleFlightsUrl),
+                  onPressed: () => _launchUrl(googleUrl),
                 ),
-              if (widget.trip.kayakUrl != null)
+              if (kayakUrl != null)
                 _BookingButton(
                   label: 'Compare on Kayak',
                   icon: Icons.compare_arrows,
                   color: context.warningColor,
-                  onPressed: () => _launchUrl(widget.trip.kayakUrl),
+                  onPressed: () => _launchUrl(kayakUrl),
                 ),
               if (widget.trip.airlineUrl != null && smartAirlineCode == 'AA')
                 _BookingButton(
