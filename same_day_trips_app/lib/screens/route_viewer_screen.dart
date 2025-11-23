@@ -76,6 +76,7 @@ class _RouteViewerScreenState extends State<RouteViewerScreen> {
         minDurationMinutes: 30,
         maxDurationMinutes: 600,
         allowedCarriers: widget.airlineFilters,
+        maxConnections: 0, // nonstop only
       );
 
       if (outboundResult != null && outboundResult.trips.isNotEmpty) {
@@ -84,6 +85,9 @@ class _RouteViewerScreenState extends State<RouteViewerScreen> {
         final returnFlights = <FlightInfo>[];
 
         for (final trip in outboundResult.trips) {
+          if (trip.outbound.numStops > 0 || trip.returnFlight.numStops > 0) {
+            continue; // enforce nonstop
+          }
           // Add outbound flight
           outboundFlights.add(FlightInfo(
             flightNumber: trip.outbound.flightNumbers,
