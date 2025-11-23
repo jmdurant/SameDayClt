@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../theme/app_colors.dart';
 import '../models/trip.dart';
+import '../services/duffel_service.dart';
 import 'trip_detail_screen.dart';
 
 /// Route Viewer Screen - displays weekly flight grid for a specific route
@@ -24,6 +25,7 @@ class RouteViewerScreen extends StatefulWidget {
 }
 
 class _RouteViewerScreenState extends State<RouteViewerScreen> {
+  final _duffelService = DuffelService();
   bool _isLoading = true;
 
   // Data structure: Map<DayIndex, List<FlightInfo>>
@@ -43,11 +45,77 @@ class _RouteViewerScreenState extends State<RouteViewerScreen> {
   Future<void> _loadWeeklyFlights() async {
     setState(() => _isLoading = true);
 
-    // TODO: Implement API calls for each day of the week
-    // For now, just simulate loading
-    await Future.delayed(const Duration(seconds: 2));
+    print('📅 Loading flights for week starting ${DateFormat('MMM d').format(widget.weekStart)}');
+
+    // Make API calls for each day of the week
+    for (int dayIndex = 0; dayIndex < 7; dayIndex++) {
+      final date = widget.weekStart.add(Duration(days: dayIndex));
+      final dateStr = DateFormat('yyyy-MM-dd').format(date);
+
+      print('  Day ${dayIndex + 1}: ${DateFormat('E MMM d').format(date)}');
+
+      // Search outbound flights for this day
+      final outboundResult = await _duffelService.searchRoundTrip(
+        origin: widget.origin,
+        destination: widget.destination,
+        date: dateStr,
+        returnDate: dateStr, // Same day for now (can be adjusted)
+        earliestDepartHour: 5,
+        departByHour: 23, // Show ALL flight times
+        returnAfterHour: 5,
+        returnByHour: 23,
+        minDurationMinutes: 30,
+        maxDurationMinutes: 600,
+        allowedCarriers: widget.airlineFilters,
+      );
+
+      if (outboundResult != null && outboundResult.trips.isNotEmpty) {
+        // Extract outbound and return flights
+        final outboundFlights = <FlightInfo>[];
+        final returnFlights = <FlightInfo>[];
+
+        for (final trip in outboundResult.trips) {
+          // Add outbound flight
+          outboundFlights.add(FlightInfo(
+            flightNumber: trip.outbound.flightNumbers,
+            date: date,
+            departTime: trip.outbound.departTime.toIso8601String(),
+            arriveTime: trip.outbound.arriveTime.toIso8601String(),
+            durationMinutes: trip.outbound.durationMinutes,
+            price: trip.outbound.price,
+            carrier: trip.outbound.carriers.isNotEmpty ? trip.outbound.carriers.first : '??',
+            numStops: trip.outbound.numStops,
+          ));
+
+          // Add return flight
+          returnFlights.add(FlightInfo(
+            flightNumber: trip.returnFlight.flightNumbers,
+            date: date,
+            departTime: trip.returnFlight.departTime.toIso8601String(),
+            arriveTime: trip.returnFlight.arriveTime.toIso8601String(),
+            durationMinutes: trip.returnFlight.durationMinutes,
+            price: trip.returnFlight.price,
+            carrier: trip.returnFlight.carriers.isNotEmpty ? trip.returnFlight.carriers.first : '??',
+            numStops: trip.returnFlight.numStops,
+          ));
+        }
+
+        setState(() {
+          _outboundFlights[dayIndex] = outboundFlights;
+          _returnFlights[dayIndex] = returnFlights;
+        });
+
+        print('    ✅ Found ${outboundFlights.length} outbound, ${returnFlights.length} return flights');
+      } else {
+        print('    ⚠️ No flights found');
+      }
+
+      // Small delay to avoid rate limiting
+      await Future.delayed(const Duration(milliseconds: 500));
+    }
 
     setState(() => _isLoading = false);
+    print('✅ Weekly flight loading complete');
   }
 
   @override
@@ -184,19 +252,145 @@ class _RouteViewerScreenState extends State<RouteViewerScreen> {
       ];
     }
 
-    // TODO: Group flights by flight number and build rows
-    // For now, return placeholder
-    return [];
+    // Group flights by flight number
+    final Map<String, Map<int, FlightInfo>> flightsByNumber = {};
+
+    flights.forEach((dayIndex, dayFlights) {
+      for (final flight in dayFlights) {
+        if (!flightsByNumber.containsKey(flight.flightNumber)) {
+          flightsByNumber[flight.flightNumber] = {};
+        }
+        flightsByNumber[flight.flightNumber]![dayIndex] = flight;
+      }
+    });
+
+    // Build rows for each flight number
+    final rows = <DataRow>[];
+    final sortedFlightNumbers = flightsByNumber.keys.toList()..sort();
+
+    for (final flightNumber in sortedFlightNumbers) {
+      final flightDays = flightsByNumber[flightNumber]!;
+
+      // Get a representative flight for pricing (use first available day)
+      final firstFlight = flightDays.values.first;
+      final isSelected = isOutbound
+          ? _selectedOutbound?.flightNumber == flightNumber
+          : _selectedReturn?.flightNumber == flightNumber;
+
+      rows.add(
+        DataRow(
+          selected: isSelected,
+          color: MaterialStateProperty.resolveWith((states) {
+            if (isSelected) return context.successColor.withOpacity(0.2);
+            return null;
+          }),
+          cells: [
+            // Select radio button
+            DataCell(
+              Radio<String>(
+                value: flightNumber,
+                groupValue: isOutbound
+                    ? _selectedOutbound?.flightNumber
+                    : _selectedReturn?.flightNumber,
+                onChanged: (value) {
+                  setState(() {
+                    if (isOutbound) {
+                      _selectedOutbound = firstFlight;
+                    } else {
+                      _selectedReturn = firstFlight;
+                    }
+                  });
+                },
+              ),
+            ),
+            // Flight number
+            DataCell(Text(
+              flightNumber,
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            )),
+            // Days of week (show time if flight operates, else -)
+            ...List.generate(7, (dayIndex) {
+              final flight = flightDays[dayIndex];
+              if (flight == null) {
+                return const DataCell(Text('-', style: TextStyle(color: Colors.grey)));
+              }
+
+              // Extract time from ISO timestamp
+              final time = _extractTime(flight.departTime);
+              return DataCell(
+                GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      if (isOutbound) {
+                        _selectedOutbound = flight;
+                      } else {
+                        _selectedReturn = flight;
+                      }
+                    });
+                  },
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        time,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                        ),
+                      ),
+                      if (flight.numStops > 0)
+                        Text(
+                          '${flight.numStops}stop',
+                          style: const TextStyle(fontSize: 10, color: Colors.grey),
+                        ),
+                    ],
+                  ),
+                ),
+              );
+            }),
+            // Price
+            DataCell(Text('\$${firstFlight.price.toStringAsFixed(0)}')),
+          ],
+        ),
+      );
+    }
+
+    return rows;
+  }
+
+  String _extractTime(String isoTimestamp) {
+    try {
+      final dt = DateTime.parse(isoTimestamp);
+      return DateFormat('HH:mm').format(dt);
+    } catch (e) {
+      return isoTimestamp; // Return as-is if not ISO format
+    }
   }
 
   void _viewTripDetails() {
     if (_selectedOutbound == null || _selectedReturn == null) return;
 
+    // Parse timestamps
+    final departOriginTime = DateTime.parse(_selectedOutbound!.departTime);
+    final arriveDestTime = DateTime.parse(_selectedOutbound!.arriveTime);
+    final departDestTime = DateTime.parse(_selectedReturn!.departTime);
+    final arriveOriginTime = DateTime.parse(_selectedReturn!.arriveTime);
+
+    // Calculate ground time (time between landing at destination and departing back)
+    final groundTimeDuration = departDestTime.difference(arriveDestTime);
+    final groundTimeHours = groundTimeDuration.inSeconds / 3600.0;
+    final groundTimeFormatted = _formatDuration(groundTimeDuration.inMinutes);
+
+    // Calculate total trip time (from departure to final arrival)
+    final totalTripDuration = arriveOriginTime.difference(departOriginTime);
+    final totalTripFormatted = _formatDuration(totalTripDuration.inMinutes);
+
     // Build Trip object from selected flights
     final trip = Trip(
       origin: widget.origin,
       destination: widget.destination,
-      city: widget.destination, // TODO: Get actual city name
+      city: widget.destination, // Destination code as city for now
       date: DateFormat('yyyy-MM-dd').format(_selectedOutbound!.date),
       outboundFlight: _selectedOutbound!.flightNumber,
       outboundStops: _selectedOutbound!.numStops,
@@ -210,10 +404,10 @@ class _RouteViewerScreenState extends State<RouteViewerScreen> {
       arriveOrigin: _selectedReturn!.arriveTime,
       returnDuration: _formatDuration(_selectedReturn!.durationMinutes),
       returnPrice: _selectedReturn!.price,
-      groundTimeHours: 0.0, // TODO: Calculate from dates
-      groundTime: '0h', // TODO: Calculate
+      groundTimeHours: groundTimeHours,
+      groundTime: groundTimeFormatted,
       totalFlightCost: _selectedOutbound!.price + _selectedReturn!.price,
-      totalTripTime: '0h', // TODO: Calculate
+      totalTripTime: totalTripFormatted,
     );
 
     Navigator.push(
