@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:duffel.com)",
+      "mcp__ide__getDiagnostics",
+      "Bash(flutter analyze:*)",
+      "WebFetch(domain:developers.amadeus.com)",
+      "WebSearch",
+      "Bash(npm run build:*)",
+      "Bash(firebase deploy:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

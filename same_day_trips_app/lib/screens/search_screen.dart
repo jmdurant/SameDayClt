@@ -6,11 +6,13 @@ import '../services/api_service.dart';
 import '../services/amadeus_service.dart';
 import '../models/trip.dart';
 import '../models/stop.dart';
+import '../models/flight_offer.dart';
 import '../theme/app_colors.dart';
 import '../theme/theme_provider.dart';
 import 'results_screen.dart';
 import 'voice_assistant_screen.dart';
 import 'saved_agendas_screen.dart';
+import 'route_viewer_screen.dart';
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
@@ -44,6 +46,10 @@ class _SearchScreenState extends State<SearchScreen> {
   final List<String> _selectedDestinations = [];
   final List<String> _selectedAirlines = [];
   final List<String> _airlineOptions = ['AA', 'DL', 'UA', 'WN', 'AS', 'B6', 'NK', 'F9'];
+
+  // Available destinations for dropdown (loaded from Amadeus)
+  List<Destination> _availableDestinations = [];
+  bool _isLoadingDestinations = false;
 
   bool _isSearching = false;
   bool _isDetectingAirport = false;
@@ -128,9 +134,64 @@ class _SearchScreenState extends State<SearchScreen> {
     }
   }
 
+  /// Check if we should use destination dropdown (only for non-AA/DL airlines)
+  /// Amadeus doesn't return AA/DL at this tier level
+  bool get _shouldUseDestinationDropdown {
+    if (_tripMode != TripMode.overnight && _tripMode != TripMode.routeViewer) {
+      return false; // Same-day mode auto-discovers
+    }
+    if (_selectedAirlines.isEmpty) {
+      return false; // No filter = show all
+    }
+    // Only use dropdown if NO AA or DL are selected
+    return !_selectedAirlines.contains('AA') && !_selectedAirlines.contains('DL');
+  }
+
+  /// Load available destinations from Amadeus based on origin
+  Future<void> _loadDestinations() async {
+    if (_origin.length != 3) return;
+
+    setState(() => _isLoadingDestinations = true);
+
+    try {
+      final destinations = await _amadeusService.discoverDestinations(
+        origin: _origin,
+        date: DateFormat('yyyy-MM-dd').format(_selectedDate),
+        domesticOnly: true,
+      );
+
+      setState(() {
+        _availableDestinations = destinations;
+        _isLoadingDestinations = false;
+      });
+    } catch (e) {
+      setState(() {
+        _availableDestinations = [];
+        _isLoadingDestinations = false;
+      });
+      print('Failed to load destinations: $e');
+    }
+  }
 
   void _searchTrips() {
     if (!_formKey.currentState!.validate()) return;
+
+    // Route Viewer mode: Navigate to grid screen
+    if (_tripMode == TripMode.routeViewer) {
+      final weekStart = _selectedDate.subtract(Duration(days: _selectedDate.weekday - 1)); // Get Monday
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => RouteViewerScreen(
+            origin: _origin,
+            destination: _destination,
+            weekStart: weekStart,
+            airlineFilters: _selectedAirlines.isEmpty ? null : _selectedAirlines,
+          ),
+        ),
+      );
+      return;
+    }
 
     print('🔍 Starting search...');
     print('  Mode: ${_tripMode == TripMode.sameDay ? 'Same-Day' : 'Overnight'}');
