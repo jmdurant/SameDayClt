@@ -9,10 +9,13 @@ import '../models/stop.dart';
 import '../models/flight_offer.dart';
 import '../theme/app_colors.dart';
 import '../theme/theme_provider.dart';
+import '../services/user_profile_service.dart';
+import '../models/user_profile.dart';
 import 'results_screen.dart';
 import 'voice_assistant_screen.dart';
 import 'saved_agendas_screen.dart';
 import 'route_viewer_screen.dart';
+import 'profile_screen.dart';
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
@@ -27,6 +30,7 @@ class _SearchScreenState extends State<SearchScreen> {
   final _formKey = GlobalKey<FormState>();
   final _apiService = ApiService();
   final _amadeusService = AmadeusService();
+  final _profileService = UserProfileService();
 
   // Trip mode
   TripMode _tripMode = TripMode.sameDay;
@@ -56,12 +60,14 @@ class _SearchScreenState extends State<SearchScreen> {
   String? _detectError;
   final TextEditingController _originController = TextEditingController();
   final TextEditingController _destinationController = TextEditingController();
+  UserProfile? _profile;
 
   @override
   void initState() {
     super.initState();
     _originController.text = _origin;
     _destinationController.text = _destination;
+    _loadProfileDefaults();
     _autoDetectHomeAirport();
   }
 
@@ -70,6 +76,30 @@ class _SearchScreenState extends State<SearchScreen> {
     _originController.dispose();
     _destinationController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadProfileDefaults() async {
+    final profile = await _profileService.load();
+    if (profile == null) return;
+    _profile = profile;
+    setState(() {
+      if (profile.homeAirport != null && profile.homeAirport!.length == 3) {
+        _origin = profile.homeAirport!.toUpperCase();
+        _originController.text = _origin;
+      }
+      if (profile.preferredAirlines.isNotEmpty) {
+        _selectedAirlines
+          ..clear()
+          ..addAll(profile.preferredAirlines.map((c) => c.toUpperCase()));
+      }
+      _earliestDepart = profile.earliestDepart ?? _earliestDepart;
+      _departBy = profile.departBy ?? _departBy;
+      _returnAfter = profile.returnAfter ?? _returnAfter;
+      _returnBy = profile.returnBy ?? _returnBy;
+      _minGroundTime = profile.minGroundTime ?? _minGroundTime;
+      _minDuration = profile.minDuration ?? _minDuration;
+      _maxDuration = profile.maxDuration ?? _maxDuration;
+    });
   }
 
   // Helper function to convert decimal hours to "Xh Ymin" format
@@ -286,6 +316,19 @@ class _SearchScreenState extends State<SearchScreen> {
         title: const Text('Same-Day Business Trips'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.person),
+            tooltip: 'Profile & Defaults',
+            onPressed: () async {
+              final result = await Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const ProfileScreen()),
+              );
+              if (result is UserProfile) {
+                _loadProfileDefaults();
+              }
+            },
+          ),
           IconButton(
             icon: Icon(
               context.isDarkMode ? Icons.light_mode : Icons.dark_mode,

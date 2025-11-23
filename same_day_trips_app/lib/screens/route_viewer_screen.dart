@@ -47,10 +47,19 @@ class _RouteViewerScreenState extends State<RouteViewerScreen> {
 
     print('📅 Loading flights for week starting ${DateFormat('MMM d').format(widget.weekStart)}');
 
+    final today = DateTime.now();
+    final todayMidnight = DateTime(today.year, today.month, today.day);
+
     // Make API calls for each day of the week
     for (int dayIndex = 0; dayIndex < 7; dayIndex++) {
       final date = widget.weekStart.add(Duration(days: dayIndex));
       final dateStr = DateFormat('yyyy-MM-dd').format(date);
+
+      // Skip past dates - Duffel doesn't allow searching for flights in the past
+      if (date.isBefore(todayMidnight)) {
+        print('  Day ${dayIndex + 1}: ${DateFormat('E MMM d').format(date)} - SKIPPED (past date)');
+        continue;
+      }
 
       print('  Day ${dayIndex + 1}: ${DateFormat('E MMM d').format(date)}');
 
