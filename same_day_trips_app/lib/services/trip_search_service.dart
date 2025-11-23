@@ -9,39 +9,48 @@ import 'duffel_service.dart';
 class TripSearchService {
   final AmadeusService _amadeus = AmadeusService();
   final DuffelService _duffel = DuffelService();
+  static const Map<String, List<String>> _metroExpansions = {
+    'NYC': ['JFK', 'LGA', 'EWR'],
+    'WAS': ['DCA', 'IAD', 'BWI'],
+    'CHI': ['ORD', 'MDW'],
+    'HOU': ['IAH', 'HOU'],
+    'LON': ['LHR', 'LGW', 'LCY', 'LTN', 'STN', 'SEN'],
+    'PAR': ['CDG', 'ORY', 'BVA'],
+    'BER': ['BER'],
+  };
 
   /// Search for all viable same-day trips with PROGRESSIVE RESULTS
   /// Returns a stream that emits trips as they're found
   Stream<Trip> searchTripsStream(SearchCriteria criteria) async* {
-    print('🚀 Starting same-day trip search from ${criteria.origin}');
-    print('📅 Date: ${criteria.date}');
-    print('⏰ Depart by: ${criteria.departBy}:00, Return: ${criteria.returnAfter}:00-${criteria.returnBy}:00');
-    print('⏱️ Flight duration limits: ${criteria.minDuration}-${criteria.maxDuration} minutes');
+    print('dYs? Starting same-day trip search from ${criteria.origin}');
+    print('dY". Date: ${criteria.date}');
+    print('⚠️ Depart by: ${criteria.departBy}:00, Return: ${criteria.returnAfter}:00-${criteria.returnBy}:00');
+    print('⚡️ Flight duration limits: ${criteria.minDuration}-${criteria.maxDuration} minutes');
 
     // Step 1: Discover or use provided destinations
     List<Destination> destinations;
     if (criteria.destinations != null && criteria.destinations!.isNotEmpty) {
-      // Use user-specified destinations
       destinations = criteria.destinations!
           .map((code) => Destination(code: code, city: code))
           .toList();
-      print('📍 Using ${destinations.length} specified destinations');
+      destinations = _expandMetroDestinations(destinations);
+      print('dY"? Using ${destinations.length} specified destinations (after metro expansion)');
     } else {
-      // Auto-discover destinations
       destinations = await _amadeus.discoverDestinations(
         origin: criteria.origin,
         date: criteria.date,
         maxDurationHours: 4,
       );
-      print('📍 Discovered ${destinations.length} destinations');
+      destinations = _expandMetroDestinations(destinations);
+      print('dY"? Discovered ${destinations.length} destinations (after metro expansion)');
     }
 
     if (destinations.isEmpty) {
-      print('⚠️ No destinations found');
+      print('❌ No destinations found');
       return;
     }
 
-    // Step 1.5: Sort destinations by distance (closest first) for faster results!
+// Step 1.5: Sort destinations by distance (closest first) for faster results!
     destinations = _sortDestinationsByDistance(criteria.origin, destinations);
 
     // Step 2: Search destinations with rate limiting - EMIT RESULTS AS FOUND
@@ -82,35 +91,35 @@ class TripSearchService {
   /// Search for all viable same-day trips (LEGACY - returns all at once)
   /// This is the main entry point - replaces the Flask /api/search endpoint
   Future<List<Trip>> searchTrips(SearchCriteria criteria) async {
-    print('🚀 Starting same-day trip search from ${criteria.origin}');
-    print('📅 Date: ${criteria.date}');
-    print('⏰ Depart by: ${criteria.departBy}:00, Return: ${criteria.returnAfter}:00-${criteria.returnBy}:00');
-    print('⏱️ Flight duration limits: ${criteria.minDuration}-${criteria.maxDuration} minutes');
+    print('dYs? Starting same-day trip search from ${criteria.origin}');
+    print('dY". Date: ${criteria.date}');
+    print('⚠️ Depart by: ${criteria.departBy}:00, Return: ${criteria.returnAfter}:00-${criteria.returnBy}:00');
+    print('⚡️ Flight duration limits: ${criteria.minDuration}-${criteria.maxDuration} minutes');
 
     // Step 1: Discover or use provided destinations
     List<Destination> destinations;
     if (criteria.destinations != null && criteria.destinations!.isNotEmpty) {
-      // Use user-specified destinations
       destinations = criteria.destinations!
           .map((code) => Destination(code: code, city: code))
           .toList();
-      print('📍 Using ${destinations.length} specified destinations');
+      destinations = _expandMetroDestinations(destinations);
+      print('dY"? Using ${destinations.length} specified destinations (after metro expansion)');
     } else {
-      // Auto-discover destinations
       destinations = await _amadeus.discoverDestinations(
         origin: criteria.origin,
         date: criteria.date,
         maxDurationHours: 4,
       );
-      print('📍 Discovered ${destinations.length} destinations');
+      destinations = _expandMetroDestinations(destinations);
+      print('dY"? Discovered ${destinations.length} destinations (after metro expansion)');
     }
 
     if (destinations.isEmpty) {
-      print('⚠️ No destinations found');
+      print('❌ No destinations found');
       return [];
     }
 
-    // Step 1.5: Sort destinations by distance (closest first) for faster results!
+// Step 1.5: Sort destinations by distance (closest first) for faster results!
     destinations = _sortDestinationsByDistance(criteria.origin, destinations);
 
     // Step 2: Search destinations with rate limiting (120 requests per 60 seconds)
@@ -419,6 +428,28 @@ class TripSearchService {
     }
 
     return sorted;
+  }
+
+  /// Expand metro/city codes (e.g., NYC, WAS) into individual airports
+  List<Destination> _expandMetroDestinations(List<Destination> destinations) {
+    final expanded = <Destination>[];
+    for (final dest in destinations) {
+      final upper = dest.code.toUpperCase();
+      if (_metroExpansions.containsKey(upper)) {
+        for (final airport in _metroExpansions[upper]!) {
+          expanded.add(Destination(
+            code: airport,
+            city: dest.city,
+            latitude: dest.latitude,
+            longitude: dest.longitude,
+            timezoneOffset: dest.timezoneOffset,
+          ));
+        }
+      } else {
+        expanded.add(dest);
+      }
+    }
+    return expanded;
   }
 
   /// Calculate distance between two lat/lng points using Haversine formula (km)

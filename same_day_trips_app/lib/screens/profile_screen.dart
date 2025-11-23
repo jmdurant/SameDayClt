@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
+import 'dart:async';
 import '../models/user_profile.dart';
+import '../models/flight_offer.dart';
 import '../services/user_profile_service.dart';
+import '../services/amadeus_service.dart';
 import '../theme/app_colors.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -13,6 +17,7 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   final _formKey = GlobalKey<FormState>();
   final _service = UserProfileService();
+  final _amadeus = AmadeusService();
 
   final _nameCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
@@ -32,11 +37,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _shareWithAssistant = false;
 
   bool _loading = true;
+  bool _detectingHome = false;
+  Timer? _searchDebounce;
 
   @override
   void initState() {
     super.initState();
     _loadProfile();
+  }
+
+  @override
+  void dispose() {
+    _searchDebounce?.cancel();
+    _nameCtrl.dispose();
+    _emailCtrl.dispose();
+    _phoneCtrl.dispose();
+    _homeCtrl.dispose();
+    super.dispose();
   }
 
   Future<void> _loadProfile() async {
@@ -98,6 +115,114 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return '${h}h ${m}min';
   }
 
+  Future<void> _autoDetectHome() async {
+    setState(() {
+      _detectingHome = true;
+    });
+    try {
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
+          setState(() => _detectingHome = false);
+          return;
+        }
+      }
+      final position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
+      final nearest = await _amadeus.findNearestAirport(
+        latitude: position.latitude,
+        longitude: position.longitude,
+      );
+      if (nearest != null) {
+        setState(() {
+          _homeCtrl.text = nearest;
+        });
+      }
+    } catch (_) {
+      // ignore errors silently for profile context
+    } finally {
+      if (mounted) {
+        setState(() => _detectingHome = false);
+      }
+    }
+  }
+
+  Future<void> _showAirportSearch() async {
+    final TextEditingController query = TextEditingController();
+    List<Destination> results = [];
+    bool loading = false;
+
+    await showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            void runSearch(String q) {
+              if (q.length < 2) return;
+              setState(() => loading = true);
+              _amadeus.searchAirports(keyword: q, limit: 10).then((res) {
+                if (!mounted) return;
+                setState(() {
+                  results = res;
+                  loading = false;
+                });
+              });
+            }
+
+            return AlertDialog(
+              title: const Text('Search Airports'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: query,
+                    decoration: const InputDecoration(hintText: 'City or airport code'),
+                    onChanged: (val) {
+                      _searchDebounce?.cancel();
+                      _searchDebounce = Timer(const Duration(milliseconds: 350), () {
+                        runSearch(val.trim());
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  if (loading) const LinearProgressIndicator(minHeight: 2),
+                  SizedBox(
+                    width: double.maxFinite,
+                    height: 240,
+                    child: results.isEmpty && !loading
+                        ? const Center(child: Text('No results yet'))
+                        : ListView.builder(
+                            itemCount: results.length,
+                            itemBuilder: (context, index) {
+                              final d = results[index];
+                              return ListTile(
+                                title: Text('${d.code} • ${d.city}'),
+                                onTap: () => Navigator.pop(context, d.code),
+                              );
+                            },
+                          ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    ).then((value) {
+      if (value is String && value.length == 3) {
+        setState(() {
+          _homeCtrl.text = value.toUpperCase();
+        });
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -143,7 +268,35 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     const SizedBox(height: 8),
                     TextFormField(
                       controller: _homeCtrl,
-                      decoration: const InputDecoration(labelText: 'Home Airport (IATA)', border: OutlineInputBorder()),
+                      decoration: InputDecoration(
+                        labelText: 'Home Airport (IATA)',
+                        border: const OutlineInputBorder(),
+                        suffixIcon: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (_detectingHome)
+                              const Padding(
+                                padding: EdgeInsets.all(8.0),
+                                child: SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                ),
+                              )
+                            else
+                              IconButton(
+                                icon: const Icon(Icons.my_location),
+                                tooltip: 'Use current location',
+                                onPressed: _autoDetectHome,
+                              ),
+                            IconButton(
+                              icon: const Icon(Icons.search),
+                              tooltip: 'Search airports',
+                              onPressed: _showAirportSearch,
+                            ),
+                          ],
+                        ),
+                      ),
                       textCapitalization: TextCapitalization.characters,
                       maxLength: 3,
                       validator: (v) {
