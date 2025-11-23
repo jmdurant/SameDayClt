@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:geolocator/geolocator.dart';
@@ -61,6 +62,7 @@ class _SearchScreenState extends State<SearchScreen> {
   final TextEditingController _originController = TextEditingController();
   final TextEditingController _destinationController = TextEditingController();
   UserProfile? _profile;
+  Timer? _airportSearchDebounce;
 
   @override
   void initState() {
@@ -75,6 +77,7 @@ class _SearchScreenState extends State<SearchScreen> {
   void dispose() {
     _originController.dispose();
     _destinationController.dispose();
+    _airportSearchDebounce?.cancel();
     super.dispose();
   }
 
@@ -164,17 +167,94 @@ class _SearchScreenState extends State<SearchScreen> {
     }
   }
 
+  Future<void> _showAirportSearch({required bool isOrigin}) async {
+    final TextEditingController queryController = TextEditingController();
+    List<Destination> results = [];
+    bool loading = false;
+
+    await showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            Future<void> runSearch(String q) async {
+              if (q.length < 2) return;
+              setState(() => loading = true);
+              final res = await _amadeusService.searchAirports(keyword: q, limit: 10);
+              setState(() {
+                results = res;
+                loading = false;
+              });
+            }
+
+            return AlertDialog(
+              title: const Text('Search Airports'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: queryController,
+                    decoration: const InputDecoration(
+                      hintText: 'Type city or airport code',
+                    ),
+                    onChanged: (value) {
+                      _airportSearchDebounce?.cancel();
+                      _airportSearchDebounce = Timer(const Duration(milliseconds: 350), () {
+                        runSearch(value.trim());
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  if (loading) const LinearProgressIndicator(minHeight: 2),
+                  SizedBox(
+                    width: double.maxFinite,
+                    height: 240,
+                    child: results.isEmpty && !loading
+                        ? const Center(child: Text('No results yet'))
+                        : ListView.builder(
+                            itemCount: results.length,
+                            itemBuilder: (context, index) {
+                              final d = results[index];
+                              return ListTile(
+                                title: Text('${d.code} • ${d.city}'),
+                                onTap: () {
+                                  Navigator.pop(context, d.code);
+                                },
+                              );
+                            },
+                          ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    ).then((value) {
+      if (value is String && value.length == 3) {
+        setState(() {
+          if (isOrigin) {
+            _origin = value.toUpperCase();
+            _originController.text = _origin;
+          } else {
+            _destination = value.toUpperCase();
+            _destinationController.text = _destination;
+          }
+        });
+      }
+    });
+  }
+
   /// Check if we should use destination dropdown (only for non-AA/DL airlines)
   /// Amadeus doesn't return AA/DL at this tier level
   bool get _shouldUseDestinationDropdown {
-    if (_tripMode != TripMode.overnight && _tripMode != TripMode.routeViewer) {
-      return false; // Same-day mode auto-discovers
-    }
-    if (_selectedAirlines.isEmpty) {
-      return false; // No filter = show all
-    }
-    // Only use dropdown if NO AA or DL are selected
-    return !_selectedAirlines.contains('AA') && !_selectedAirlines.contains('DL');
+    return false; // Disable airline-filtered destination dropdown
   }
 
   /// Load available destinations from Amadeus based on origin
@@ -361,6 +441,8 @@ class _SearchScreenState extends State<SearchScreen> {
                       onPressed: () {
                         setState(() {
                           _tripMode = TripMode.sameDay;
+                          // Reset return date to same day for same-day mode
+                          _returnDate = null;
                         });
                       },
                       style: ElevatedButton.styleFrom(
@@ -588,20 +670,31 @@ class _SearchScreenState extends State<SearchScreen> {
                     hintText: 'e.g., CLT, ATL, LAX',
                     prefixIcon: const Icon(Icons.home),
                     border: const OutlineInputBorder(),
-                    suffixIcon: _isDetectingAirport
-                        ? const Padding(
-                            padding: EdgeInsets.all(12.0),
-                            child: SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            ),
-                          )
-                        : IconButton(
-                            icon: const Icon(Icons.my_location),
-                            tooltip: 'Use current location',
-                            onPressed: _autoDetectHomeAirport,
+                  suffixIcon: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (_isDetectingAirport)
+                        const Padding(
+                          padding: EdgeInsets.all(8.0),
+                          child: SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
                           ),
+                        )
+                      else
+                        IconButton(
+                          icon: const Icon(Icons.my_location),
+                          tooltip: 'Use current location',
+                          onPressed: _autoDetectHomeAirport,
+                        ),
+                      IconButton(
+                        icon: const Icon(Icons.search),
+                        tooltip: 'Search airports',
+                        onPressed: () => _showAirportSearch(isOrigin: true),
+                      ),
+                    ],
+                  ),
                   ),
                   textCapitalization: TextCapitalization.characters,
                   maxLength: 3,
@@ -680,75 +773,41 @@ class _SearchScreenState extends State<SearchScreen> {
                     ),
                     const SizedBox(width: 12),
                     Expanded(
-                      child: _shouldUseDestinationDropdown
-                          ? DropdownButtonFormField<String>(
-                              value: _availableDestinations.any((d) => d.code == _destination) ? _destination : null,
-                              decoration: InputDecoration(
-                                labelText: 'Destination Airport',
-                                prefixIcon: const Icon(Icons.flight_land),
-                                border: const OutlineInputBorder(),
-                                suffixIcon: _isLoadingDestinations
-                                    ? const Padding(
-                                        padding: EdgeInsets.all(12.0),
-                                        child: SizedBox(
-                                          width: 16,
-                                          height: 16,
-                                          child: CircularProgressIndicator(strokeWidth: 2),
-                                        ),
-                                      )
-                                    : null,
-                              ),
-                              items: _availableDestinations
-                                  .map((dest) => DropdownMenuItem(
-                                        value: dest.code,
-                                        child: Text('${dest.code} - ${dest.city}'),
-                                      ))
-                                  .toList(),
-                              onChanged: (value) {
-                                if (value != null) {
-                                  setState(() {
-                                    _destination = value;
-                                    _destinationController.text = value;
-                                  });
-                                }
-                              },
-                              validator: (value) {
-                                if (value == null || value.isEmpty) {
-                                  return 'Please select a destination';
-                                }
-                                return null;
-                              },
-                            )
-                          : TextFormField(
-                              controller: _destinationController,
-                              decoration: const InputDecoration(
-                                labelText: 'Destination Airport',
-                                hintText: 'e.g., ATL',
-                                prefixIcon: Icon(Icons.flight_land),
-                                border: OutlineInputBorder(),
-                              ),
-                              textCapitalization: TextCapitalization.characters,
-                              maxLength: 3,
-                              onChanged: (value) {
-                                final upper = value.toUpperCase();
-                                if (upper != value) {
-                                  _destinationController.value = _destinationController.value.copyWith(
-                                    text: upper,
-                                    selection: TextSelection.collapsed(offset: upper.length),
-                                  );
-                                }
-                                _destination = upper;
-                              },
-                              validator: (value) {
-                                if (value == null || value.isEmpty) {
-                                  return 'Please enter destination code';
-                                }
-                                if (value.length != 3) {
-                                  return 'Airport code must be 3 letters';
-                                }
-                                return null;
-                              },
-                            ),
+                      child: TextFormField(
+                        controller: _destinationController,
+                        decoration: InputDecoration(
+                          labelText: 'Destination Airport',
+                          hintText: 'e.g., ATL',
+                          prefixIcon: const Icon(Icons.flight_land),
+                          border: const OutlineInputBorder(),
+                          suffixIcon: IconButton(
+                            icon: const Icon(Icons.search),
+                            tooltip: 'Search airports',
+                            onPressed: () => _showAirportSearch(isOrigin: false),
+                          ),
+                        ),
+                        textCapitalization: TextCapitalization.characters,
+                        maxLength: 3,
+                        onChanged: (value) {
+                          final upper = value.toUpperCase();
+                          if (upper != value) {
+                            _destinationController.value = _destinationController.value.copyWith(
+                              text: upper,
+                              selection: TextSelection.collapsed(offset: upper.length),
+                            );
+                          }
+                          _destination = upper;
+                        },
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'Please enter destination code';
+                          }
+                          if (value.length != 3) {
+                            return 'Airport code must be 3 letters';
+                          }
+                          return null;
+                        },
+                      ),
                     ),
                   ],
                 ),

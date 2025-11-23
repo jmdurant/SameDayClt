@@ -158,12 +158,14 @@ class Destination {
   final String city;
   final double? latitude;  // For distance-based sorting
   final double? longitude; // For distance-based sorting
+  final String? timezoneOffset;
 
   Destination({
     required this.code,
     required this.city,
     this.latitude,
     this.longitude,
+    this.timezoneOffset,
   });
 
   factory Destination.fromJson(Map<String, dynamic> json) {
@@ -171,6 +173,7 @@ class Destination {
     return Destination(
       code: code,
       city: code, // Flight Inspiration doesn't provide city names
+      timezoneOffset: json['timeZoneOffset'] as String?,
     );
   }
 }

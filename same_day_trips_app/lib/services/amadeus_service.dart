@@ -144,6 +144,49 @@ class AmadeusService {
     }
   }
 
+  /// Airport & City search for autocomplete
+  Future<List<Destination>> searchAirports({
+    required String keyword,
+    int limit = 10,
+  }) async {
+    if (keyword.trim().isEmpty) return [];
+    await authenticate();
+
+    try {
+      final response = await _dio.get(
+        '/v1/reference-data/locations',
+        options: Options(
+          headers: {'Authorization': 'Bearer $_token'},
+        ),
+        queryParameters: {
+          'subType': 'AIRPORT',
+          'keyword': keyword,
+          'page[limit]': limit,
+          'sort': 'analytics.travelers.score',
+          'view': 'FULL',
+        },
+      );
+
+      final data = response.data['data'] as List? ?? [];
+      return data.map<Destination>((item) {
+        final address = item['address'] as Map<String, dynamic>? ?? {};
+        final cityName = item['cityName'] as String? ?? '';
+        final country = address['countryCode'] as String? ?? '';
+        final tzOffset = item['timeZoneOffset'] as String?;
+        return Destination(
+          code: item['iataCode'] as String,
+          city: cityName.isNotEmpty ? '$cityName, $country' : item['name'] as String? ?? item['iataCode'] as String,
+          latitude: (item['geoCode']?['latitude'] as num?)?.toDouble(),
+          longitude: (item['geoCode']?['longitude'] as num?)?.toDouble(),
+          timezoneOffset: tzOffset,
+        );
+      }).toList();
+    } catch (e) {
+      print('❌ Airport search failed: $e');
+      return [];
+    }
+  }
+
   /// Search for flights between two airports on a specific date
   Future<List<FlightOffer>> searchFlights({
     required String origin,
