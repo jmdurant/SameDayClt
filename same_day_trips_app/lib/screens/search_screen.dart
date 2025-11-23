@@ -619,6 +619,10 @@ class _SearchScreenState extends State<SearchScreen> {
                             );
                           }
                           _origin = upper;
+                          // Load destinations when origin changes (for dropdown mode)
+                          if (_shouldUseDestinationDropdown && upper.length == 3) {
+                            _loadDestinations();
+                          }
                         },
                         validator: (value) {
                           if (value == null || value.isEmpty) {
@@ -633,36 +637,75 @@ class _SearchScreenState extends State<SearchScreen> {
                     ),
                     const SizedBox(width: 12),
                     Expanded(
-                      child: TextFormField(
-                        controller: _destinationController,
-                        decoration: const InputDecoration(
-                          labelText: 'Destination Airport',
-                          hintText: 'e.g., ATL',
-                          prefixIcon: Icon(Icons.flight_land),
-                          border: OutlineInputBorder(),
-                        ),
-                        textCapitalization: TextCapitalization.characters,
-                        maxLength: 3,
-                        onChanged: (value) {
-                          final upper = value.toUpperCase();
-                          if (upper != value) {
-                            _destinationController.value = _destinationController.value.copyWith(
-                              text: upper,
-                              selection: TextSelection.collapsed(offset: upper.length),
-                            );
-                          }
-                          _destination = upper;
-                        },
-                        validator: (value) {
-                          if (value == null || value.isEmpty) {
-                            return 'Please enter destination code';
-                          }
-                          if (value.length != 3) {
-                            return 'Airport code must be 3 letters';
-                          }
-                          return null;
-                        },
-                      ),
+                      child: _shouldUseDestinationDropdown
+                          ? DropdownButtonFormField<String>(
+                              value: _availableDestinations.any((d) => d.code == _destination) ? _destination : null,
+                              decoration: InputDecoration(
+                                labelText: 'Destination Airport',
+                                prefixIcon: const Icon(Icons.flight_land),
+                                border: const OutlineInputBorder(),
+                                suffixIcon: _isLoadingDestinations
+                                    ? const Padding(
+                                        padding: EdgeInsets.all(12.0),
+                                        child: SizedBox(
+                                          width: 16,
+                                          height: 16,
+                                          child: CircularProgressIndicator(strokeWidth: 2),
+                                        ),
+                                      )
+                                    : null,
+                              ),
+                              items: _availableDestinations
+                                  .map((dest) => DropdownMenuItem(
+                                        value: dest.code,
+                                        child: Text('${dest.code} - ${dest.city}'),
+                                      ))
+                                  .toList(),
+                              onChanged: (value) {
+                                if (value != null) {
+                                  setState(() {
+                                    _destination = value;
+                                    _destinationController.text = value;
+                                  });
+                                }
+                              },
+                              validator: (value) {
+                                if (value == null || value.isEmpty) {
+                                  return 'Please select a destination';
+                                }
+                                return null;
+                              },
+                            )
+                          : TextFormField(
+                              controller: _destinationController,
+                              decoration: const InputDecoration(
+                                labelText: 'Destination Airport',
+                                hintText: 'e.g., ATL',
+                                prefixIcon: Icon(Icons.flight_land),
+                                border: OutlineInputBorder(),
+                              ),
+                              textCapitalization: TextCapitalization.characters,
+                              maxLength: 3,
+                              onChanged: (value) {
+                                final upper = value.toUpperCase();
+                                if (upper != value) {
+                                  _destinationController.value = _destinationController.value.copyWith(
+                                    text: upper,
+                                    selection: TextSelection.collapsed(offset: upper.length),
+                                  );
+                                }
+                                _destination = upper;
+                              },
+                              validator: (value) {
+                                if (value == null || value.isEmpty) {
+                                  return 'Please enter destination code';
+                                }
+                                if (value.length != 3) {
+                                  return 'Airport code must be 3 letters';
+                                }
+                                return null;
+                              },
+                            ),
                     ),
                   ],
                 ),
@@ -873,6 +916,10 @@ class _SearchScreenState extends State<SearchScreen> {
                           _selectedAirlines.remove(code);
                         }
                       });
+                      // Reload destinations when airline filter changes
+                      if (_shouldUseDestinationDropdown && _origin.length == 3) {
+                        _loadDestinations();
+                      }
                     },
                   );
                 }).toList(),
