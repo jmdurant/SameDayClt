@@ -372,6 +372,15 @@ class _RouteViewerScreenState extends State<RouteViewerScreen> {
     }
   }
 
+  String _formatDisplayTime(String isoTimestamp) {
+    try {
+      final dt = DateTime.parse(isoTimestamp);
+      return DateFormat('h:mm a').format(dt);
+    } catch (e) {
+      return isoTimestamp;
+    }
+  }
+
   void _viewTripDetails() {
     if (_selectedOutbound == null || _selectedReturn == null) return;
 
@@ -398,14 +407,14 @@ class _RouteViewerScreenState extends State<RouteViewerScreen> {
       date: DateFormat('yyyy-MM-dd').format(_selectedOutbound!.date),
       outboundFlight: _selectedOutbound!.flightNumber,
       outboundStops: _selectedOutbound!.numStops,
-      departOrigin: _selectedOutbound!.departTime,
-      arriveDestination: _selectedOutbound!.arriveTime,
+      departOrigin: _formatDisplayTime(_selectedOutbound!.departTime),
+      arriveDestination: _formatDisplayTime(_selectedOutbound!.arriveTime),
       outboundDuration: _formatDuration(_selectedOutbound!.durationMinutes),
       outboundPrice: _selectedOutbound!.price,
       returnFlight: _selectedReturn!.flightNumber,
       returnStops: _selectedReturn!.numStops,
-      departDestination: _selectedReturn!.departTime,
-      arriveOrigin: _selectedReturn!.arriveTime,
+      departDestination: _formatDisplayTime(_selectedReturn!.departTime),
+      arriveOrigin: _formatDisplayTime(_selectedReturn!.arriveTime),
       returnDuration: _formatDuration(_selectedReturn!.durationMinutes),
       returnPrice: _selectedReturn!.price,
       groundTimeHours: groundTimeHours,
