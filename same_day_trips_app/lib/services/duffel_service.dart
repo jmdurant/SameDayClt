@@ -33,6 +33,7 @@ class DuffelService {
     required String origin,
     required String destination,
     required String date,
+    String? returnDate,             // Optional: defaults to same day for backward compatibility
     int earliestDepartHour = 5,     // e.g., 5 for 5 AM (EARLIEST departure)
     required int departByHour,      // e.g., 9 for 9 AM (LATEST departure)
     required int returnAfterHour,   // e.g., 15 for 3 PM (EARLIEST home arrival)
@@ -49,6 +50,7 @@ class DuffelService {
         origin: origin,
         destination: destination,
         date: date,
+        returnDate: returnDate,
         earliestDepartHour: earliestDepartHour,
         departByHour: departByHour,
         returnAfterHour: returnAfterHour,
@@ -116,7 +118,7 @@ class DuffelService {
               {
                 'origin': destination,  // Return flight
                 'destination': origin,
-                'departure_date': date,
+                'departure_date': returnDate ?? date, // Use separate return date for overnight trips
                 'departure_time': {
                   'from': returnDepartFrom,
                   'to': returnDepartTo,
@@ -608,6 +610,7 @@ class DuffelService {
     required String origin,
     required String destination,
     required String date,
+    String? returnDate,
     int earliestDepartHour = 5,
     required int departByHour,
     required int returnAfterHour,
@@ -626,6 +629,7 @@ class DuffelService {
           'origin': origin,
           'destination': destination,
           'date': date,
+          if (returnDate != null) 'returnDate': returnDate, // Only include if different from departure
           'earliestDepartHour': earliestDepartHour,
           'departByHour': departByHour,
           'returnAfterHour': returnAfterHour,

@@ -100,6 +100,7 @@ export const duffelProxy = functions.https.onRequest(
           origin,
           destination,
           date,
+          returnDate, // Optional: defaults to same day for backward compatibility
           earliestDepartHour = 5,
           departByHour = 9,
           returnAfterHour = 15,
@@ -108,6 +109,9 @@ export const duffelProxy = functions.https.onRequest(
           maxDurationMinutes = 240,
           allowedCarriers = [],
         } = req.body;
+
+        // Use returnDate if provided, otherwise default to same day
+        const actualReturnDate = returnDate || date;
 
         if (!origin || !destination) {
           res.status(400).json({
@@ -167,7 +171,7 @@ export const duffelProxy = functions.https.onRequest(
                 {
                   origin: destination, // Return flight
                   destination: origin,
-                  departure_date: date,
+                  departure_date: actualReturnDate, // Use separate return date for overnight trips
                   departure_time: {
                     from: returnFrom,
                     to: returnTo,

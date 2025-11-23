@@ -123,7 +123,10 @@ exports.duffelProxy = functions.https.onRequest((req, res) => {
                 return;
             }
             // Get parameters from request body
-            const { origin, destination, date, earliestDepartHour = 5, departByHour = 9, returnAfterHour = 15, returnByHour = 19, minDurationMinutes = 50, maxDurationMinutes = 240, allowedCarriers = [], } = req.body;
+            const { origin, destination, date, returnDate, // Optional: defaults to same day for backward compatibility
+            earliestDepartHour = 5, departByHour = 9, returnAfterHour = 15, returnByHour = 19, minDurationMinutes = 50, maxDurationMinutes = 240, allowedCarriers = [], } = req.body;
+            // Use returnDate if provided, otherwise default to same day
+            const actualReturnDate = returnDate || date;
             if (!origin || !destination) {
                 res.status(400).json({
                     error: 'Origin and destination are required',
@@ -176,7 +179,7 @@ exports.duffelProxy = functions.https.onRequest((req, res) => {
                             {
                                 origin: destination, // Return flight
                                 destination: origin,
-                                departure_date: date,
+                                departure_date: actualReturnDate, // Use separate return date for overnight trips
                                 departure_time: {
                                     from: returnFrom,
                                     to: returnTo,

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../models/trip.dart';
 import '../utils/time_formatter.dart';
@@ -5,14 +6,16 @@ import '../theme/app_colors.dart';
 import 'trip_detail_screen.dart';
 
 class ResultsScreen extends StatefulWidget {
-  final List<Trip> trips;
+  final List<Trip>? trips; // Optional for legacy support
+  final Stream<Trip>? tripStream; // For progressive results
   final Map<String, dynamic> searchParams;
 
   const ResultsScreen({
     super.key,
-    required this.trips,
+    this.trips,
+    this.tripStream,
     required this.searchParams,
-  });
+  }) : assert(trips != null || tripStream != null, 'Either trips or tripStream must be provided');
 
   @override
   State<ResultsScreen> createState() => _ResultsScreenState();
@@ -20,10 +23,52 @@ class ResultsScreen extends StatefulWidget {
 
 class _ResultsScreenState extends State<ResultsScreen> {
   String _sortBy = 'groundTime'; // groundTime, cost, totalTime, homeDeparture, destDeparture, city
-  bool _sortAscending = true; // Start with true, groundTime will flip to descending (high to low)
+  bool _sortAscending = false; // Default to descending for groundTime (max time first)
+
+  List<Trip> _trips = [];
+  bool _isLoading = false;
+  StreamSubscription<Trip>? _streamSubscription;
+
+  @override
+  void initState() {
+    super.initState();
+
+    if (widget.trips != null) {
+      // Legacy mode: use provided list
+      _trips = widget.trips!;
+    } else if (widget.tripStream != null) {
+      // Progressive mode: listen to stream
+      _isLoading = true;
+      _streamSubscription = widget.tripStream!.listen(
+        (trip) {
+          setState(() {
+            _trips.add(trip);
+          });
+        },
+        onDone: () {
+          setState(() {
+            _isLoading = false;
+          });
+          print('✅ All trips received: ${_trips.length} total');
+        },
+        onError: (error) {
+          setState(() {
+            _isLoading = false;
+          });
+          print('❌ Stream error: $error');
+        },
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _streamSubscription?.cancel();
+    super.dispose();
+  }
 
   List<Trip> get _sortedTrips {
-    final trips = List<Trip>.from(widget.trips);
+    final trips = List<Trip>.from(_trips);
 
     trips.sort((a, b) {
       int comparison;
@@ -119,9 +164,23 @@ class _ResultsScreenState extends State<ResultsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Found ${widget.trips.length} viable trips',
-                  style: Theme.of(context).textTheme.titleLarge,
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        _isLoading
+                            ? 'Found ${_trips.length} trips (searching...)'
+                            : 'Found ${_trips.length} viable trips',
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                    ),
+                    if (_isLoading)
+                      const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                  ],
                 ),
                 const SizedBox(height: 4),
                 Text(
@@ -138,7 +197,7 @@ class _ResultsScreenState extends State<ResultsScreen> {
 
           // Results List
           Expanded(
-            child: widget.trips.isEmpty
+            child: _trips.isEmpty && !_isLoading
                 ? Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,

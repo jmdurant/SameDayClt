@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:math';
 import '../models/trip.dart';
 import '../models/flight_offer.dart';
 import 'amadeus_service.dart';
@@ -8,7 +10,76 @@ class TripSearchService {
   final AmadeusService _amadeus = AmadeusService();
   final DuffelService _duffel = DuffelService();
 
-  /// Search for all viable same-day trips
+  /// Search for all viable same-day trips with PROGRESSIVE RESULTS
+  /// Returns a stream that emits trips as they're found
+  Stream<Trip> searchTripsStream(SearchCriteria criteria) async* {
+    print('🚀 Starting same-day trip search from ${criteria.origin}');
+    print('📅 Date: ${criteria.date}');
+    print('⏰ Depart by: ${criteria.departBy}:00, Return: ${criteria.returnAfter}:00-${criteria.returnBy}:00');
+    print('⏱️ Flight duration limits: ${criteria.minDuration}-${criteria.maxDuration} minutes');
+
+    // Step 1: Discover or use provided destinations
+    List<Destination> destinations;
+    if (criteria.destinations != null && criteria.destinations!.isNotEmpty) {
+      // Use user-specified destinations
+      destinations = criteria.destinations!
+          .map((code) => Destination(code: code, city: code))
+          .toList();
+      print('📍 Using ${destinations.length} specified destinations');
+    } else {
+      // Auto-discover destinations
+      destinations = await _amadeus.discoverDestinations(
+        origin: criteria.origin,
+        date: criteria.date,
+        maxDurationHours: 4,
+      );
+      print('📍 Discovered ${destinations.length} destinations');
+    }
+
+    if (destinations.isEmpty) {
+      print('⚠️ No destinations found');
+      return;
+    }
+
+    // Step 1.5: Sort destinations by distance (closest first) for faster results!
+    destinations = _sortDestinationsByDistance(criteria.origin, destinations);
+
+    // Step 2: Search destinations with rate limiting - EMIT RESULTS AS FOUND
+    print('⚡ Searching ${destinations.length} destinations (streaming results)...');
+
+    // Optimized batching: 20 requests per batch, 10 second delay between batches
+    const batchSize = 20;
+    for (var i = 0; i < destinations.length; i += batchSize) {
+      final batch = destinations.skip(i).take(batchSize).toList();
+
+      print('  📦 Batch ${(i ~/ batchSize) + 1}/${(destinations.length / batchSize).ceil()}: Searching ${batch.length} destinations...');
+
+      // Search batch in parallel
+      final batchFutures = batch.map((dest) =>
+          _searchDestination(dest, criteria)
+      ).toList();
+
+      final batchResults = await Future.wait(batchFutures);
+
+      // EMIT TRIPS AS SOON AS BATCH COMPLETES
+      for (final trips in batchResults) {
+        for (final trip in trips) {
+          yield trip; // Stream each trip immediately!
+        }
+      }
+
+      // 10 second delay between batches to avoid rate limiting
+      if (i + batchSize < destinations.length) {
+        final nextBatchNum = (i ~/ batchSize) + 2;
+        print('  ⏳ Waiting 10s before batch $nextBatchNum (rate limit: 120 req/60s)...');
+        await Future.delayed(Duration(seconds: 10));
+      }
+    }
+
+    print('✅ Search complete - all results streamed');
+  }
+
+  /// Search for all viable same-day trips (LEGACY - returns all at once)
   /// This is the main entry point - replaces the Flask /api/search endpoint
   Future<List<Trip>> searchTrips(SearchCriteria criteria) async {
     print('🚀 Starting same-day trip search from ${criteria.origin}');
@@ -38,6 +109,9 @@ class TripSearchService {
       print('⚠️ No destinations found');
       return [];
     }
+
+    // Step 1.5: Sort destinations by distance (closest first) for faster results!
+    destinations = _sortDestinationsByDistance(criteria.origin, destinations);
 
     // Step 2: Search destinations with rate limiting (120 requests per 60 seconds)
     print('⚡ Searching ${destinations.length} destinations (rate limit: 120 req/60s)...');
@@ -84,6 +158,7 @@ class TripSearchService {
         origin: criteria.origin,
         destination: destination.code,
         date: criteria.date,
+        returnDate: criteria.returnDate, // Pass return date for overnight trips
         earliestDepartHour: criteria.earliestDepart,
         departByHour: criteria.departBy,
         returnAfterHour: criteria.returnAfter,
@@ -119,6 +194,21 @@ class TripSearchService {
             offer.returnFlight.durationMinutes < criteria.minDuration) {
           print('    ❌ Filtered out: flight time below ${criteria.minDuration} minutes');
           return null;
+        }
+
+        // Filter by allowed airlines if specified
+        if (criteria.airlines != null && criteria.airlines!.isNotEmpty) {
+          final outboundCarriers = offer.outbound.carriers.toSet();
+          final returnCarriers = offer.returnFlight.carriers.toSet();
+          final allowedAirlines = criteria.airlines!.toSet();
+
+          final outboundMatch = outboundCarriers.any((c) => allowedAirlines.contains(c));
+          final returnMatch = returnCarriers.any((c) => allowedAirlines.contains(c));
+
+          if (!outboundMatch || !returnMatch) {
+            print('    ❌ Filtered out: airlines ${outboundCarriers.union(returnCarriers)} not in allowed list ${allowedAirlines}');
+            return null;
+          }
         }
 
         return _createTrip(
@@ -288,5 +378,85 @@ class TripSearchService {
     final returnSlice = '{"orig":"$dest","origNearby":false,"dest":"$origin","destNearby":false,"date":"$date"}';
     final slicesEncoded = Uri.encodeComponent('[$outboundSlice,$returnSlice]');
     return 'https://www.aa.com/booking/search?locale=en_US&pax=1&adult=1&child=0&type=RoundTrip&searchType=Award&cabin=&carriers=ALL&slices=$slicesEncoded&maxAwardSegmentAllowed=2';
+  }
+
+  /// Sort destinations by distance from origin (closest first)
+  /// This ensures we search nearby airports first for faster results!
+  List<Destination> _sortDestinationsByDistance(
+    String originCode,
+    List<Destination> destinations,
+  ) {
+    // Get origin coordinates from the first destination with coords, or use hardcoded fallback
+    final originCoords = _getAirportCoordinates(originCode);
+    if (originCoords == null) {
+      print('⚠️ Could not find coordinates for $originCode, using alphabetical order');
+      return destinations;
+    }
+
+    // Calculate distance to each destination and sort
+    final destinationsWithDistance = destinations.where((dest) {
+      return dest.latitude != null && dest.longitude != null;
+    }).map((dest) {
+      final distance = _calculateDistance(
+        originCoords[0], originCoords[1],
+        dest.latitude!, dest.longitude!,
+      );
+      return {'dest': dest, 'distance': distance};
+    }).toList();
+
+    // Sort by distance (closest first)
+    destinationsWithDistance.sort((a, b) =>
+      (a['distance'] as double).compareTo(b['distance'] as double)
+    );
+
+    final sorted = destinationsWithDistance
+        .map((item) => item['dest'] as Destination)
+        .toList();
+
+    print('📏 Sorted ${sorted.length} destinations by distance (closest first)');
+    if (sorted.isNotEmpty) {
+      print('   Nearest: ${sorted.first.code}, Farthest: ${sorted.last.code}');
+    }
+
+    return sorted;
+  }
+
+  /// Calculate distance between two lat/lng points using Haversine formula (km)
+  double _calculateDistance(double lat1, double lon1, double lat2, double lon2) {
+    const earthRadius = 6371.0; // Earth's radius in kilometers
+    final dLat = _toRadians(lat2 - lat1);
+    final dLon = _toRadians(lon2 - lon1);
+
+    final a = sin(dLat / 2) * sin(dLat / 2) +
+        cos(_toRadians(lat1)) * cos(_toRadians(lat2)) *
+        sin(dLon / 2) * sin(dLon / 2);
+
+    final c = 2 * asin(sqrt(a));
+    return earthRadius * c;
+  }
+
+  double _toRadians(double degrees) => degrees * (pi / 180.0);
+
+  /// Get coordinates for common US airports (fallback if needed)
+  List<double>? _getAirportCoordinates(String code) {
+    // Common US airports - add more as needed
+    const airports = {
+      'CLT': [35.2144, -80.9473],
+      'ATL': [33.6407, -84.4277],
+      'ORD': [41.9742, -87.9073],
+      'DFW': [32.8998, -97.0403],
+      'LAX': [33.9416, -118.4085],
+      'JFK': [40.6413, -73.7781],
+      'SFO': [37.6213, -122.3790],
+      'MIA': [25.7959, -80.2870],
+      'BOS': [42.3656, -71.0096],
+      'SEA': [47.4502, -122.3088],
+      'LAS': [36.0840, -115.1537],
+      'PHX': [33.4352, -112.0101],
+      'IAH': [29.9902, -95.3368],
+      'DEN': [39.8561, -104.6737],
+      'MCO': [28.4312, -81.3081],
+    };
+    return airports[code];
   }
 }

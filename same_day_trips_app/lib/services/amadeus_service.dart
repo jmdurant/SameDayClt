@@ -50,37 +50,93 @@ class AmadeusService {
     }
   }
 
-  /// Discover all direct flight destinations from an airport
-  /// Uses Airport Direct Destinations API
-  Future<List<Destination>> discoverDestinations({
-    required String origin,
-    required String date,
-    int maxDurationHours = 4,
+  /// Find nearest airport to a geographic location
+  /// Uses Airport Nearest Relevant API - replaces manual airport lookup!
+  Future<String?> findNearestAirport({
+    required double latitude,
+    required double longitude,
+    int radiusKm = 100,
   }) async {
     await authenticate();
 
     try {
-      print('🔍 Discovering direct destinations from $origin...');
+      print('📍 Finding nearest airport to ($latitude, $longitude)...');
+
+      final response = await _dio.get(
+        '/v1/reference-data/locations/airports',
+        options: Options(
+          headers: {'Authorization': 'Bearer $_token'},
+        ),
+        queryParameters: {
+          'latitude': latitude,
+          'longitude': longitude,
+          'radius': radiusKm,
+          'page[limit]': 1, // Only need the closest one
+          'sort': 'relevance', // Sort by relevance (distance + traffic)
+        },
+      );
+
+      final data = response.data['data'] as List? ?? [];
+      if (data.isEmpty) {
+        print('⚠️ No airports found within ${radiusKm}km');
+        return null;
+      }
+
+      final nearestAirport = data.first;
+      final iataCode = nearestAirport['iataCode'] as String;
+      final name = nearestAirport['name'] as String?;
+      final distance = nearestAirport['distance']?['value'];
+
+      print('✅ Found nearest airport: $iataCode${name != null ? ' ($name)' : ''}${distance != null ? ' - ${distance}km away' : ''}');
+      return iataCode;
+    } catch (e) {
+      print('⚠️ Airport lookup failed: $e');
+      return null;
+    }
+  }
+
+  /// Discover all direct flight destinations from an airport
+  /// Uses Airport Direct Destinations API with optional country filtering
+  /// Filters to DOMESTIC ONLY (US) by default for same-day trip feasibility
+  Future<List<Destination>> discoverDestinations({
+    required String origin,
+    required String date,
+    int maxDurationHours = 4,
+    bool domesticOnly = true, // Filter to domestic US flights only
+  }) async {
+    await authenticate();
+
+    try {
+      print('🔍 Discovering direct destinations from $origin (domestic only: $domesticOnly)...');
+
+      // Build query parameters - use API's arrivalCountryCode for filtering
+      final queryParams = {
+        'departureAirportCode': origin,
+        if (domesticOnly) 'arrivalCountryCode': 'US', // Use API filter for US domestic!
+      };
 
       final response = await _dio.get(
         '/v1/airport/direct-destinations',
         options: Options(
           headers: {'Authorization': 'Bearer $_token'},
         ),
-        queryParameters: {
-          'departureAirportCode': origin,
-        },
+        queryParameters: queryParams,
       );
 
       final data = response.data['data'] as List? ?? [];
+
+      // Parse destinations with geographic coordinates
       final destinations = data.map((item) {
+        final geoCode = item['geoCode'] as Map<String, dynamic>?;
         return Destination(
           code: item['iataCode'] as String,
           city: item['name'] as String,
+          latitude: geoCode?['latitude'] as double?,
+          longitude: geoCode?['longitude'] as double?,
         );
       }).toList();
 
-      print('✅ Found ${destinations.length} direct destinations');
+      print('✅ Found ${destinations.length} ${domesticOnly ? 'domestic US' : 'total'} destinations');
       return destinations;
     } catch (e) {
       print('⚠️ Airport Direct Destinations API failed: $e');

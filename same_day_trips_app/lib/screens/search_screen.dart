@@ -3,11 +3,11 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:geolocator/geolocator.dart';
 import '../services/api_service.dart';
+import '../services/amadeus_service.dart';
 import '../models/trip.dart';
 import '../models/stop.dart';
 import '../theme/app_colors.dart';
 import '../theme/theme_provider.dart';
-import '../utils/airport_lookup.dart';
 import 'results_screen.dart';
 import 'voice_assistant_screen.dart';
 import 'saved_agendas_screen.dart';
@@ -19,19 +19,27 @@ class SearchScreen extends StatefulWidget {
   State<SearchScreen> createState() => _SearchScreenState();
 }
 
+enum TripMode { sameDay, overnight, routeViewer }
+
 class _SearchScreenState extends State<SearchScreen> {
   final _formKey = GlobalKey<FormState>();
   final _apiService = ApiService();
+  final _amadeusService = AmadeusService();
+
+  // Trip mode
+  TripMode _tripMode = TripMode.sameDay;
 
   // Form values
   String _origin = 'CLT';
+  String _destination = 'ATL'; // For overnight mode
   DateTime _selectedDate = DateTime.now();
+  DateTime? _returnDate; // For overnight mode
   int _earliestDepart = 5; // 5 AM - earliest departure time
   int _departBy = 9; // 9 AM - realistic for commercial flights
   int _returnAfter = 15;
   int _returnBy = 19;
   double _minGroundTime = 3.0;
-  int _minDuration = 50; // filter out very short hops
+  int _minDuration = 70; // filter out very short hops
   int _maxDuration = 204; // ~3.4 hours flight time
   final List<String> _selectedDestinations = [];
   final List<String> _selectedAirlines = [];
@@ -41,17 +49,20 @@ class _SearchScreenState extends State<SearchScreen> {
   bool _isDetectingAirport = false;
   String? _detectError;
   final TextEditingController _originController = TextEditingController();
+  final TextEditingController _destinationController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
     _originController.text = _origin;
+    _destinationController.text = _destination;
     _autoDetectHomeAirport();
   }
 
   @override
   void dispose() {
     _originController.dispose();
+    _destinationController.dispose();
     super.dispose();
   }
 
@@ -90,7 +101,13 @@ class _SearchScreenState extends State<SearchScreen> {
         desiredAccuracy: LocationAccuracy.high,
       );
 
-      final nearest = findNearestAirport(position.latitude, position.longitude);
+      // Use Amadeus API to find nearest airport (replaces manual lookup!)
+      final nearest = await _amadeusService.findNearestAirport(
+        latitude: position.latitude,
+        longitude: position.longitude,
+        radiusKm: 100,
+      );
+
       if (nearest != null) {
         setState(() {
           _origin = nearest;
@@ -112,12 +129,19 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
 
-  Future<void> _searchTrips() async {
+  void _searchTrips() {
     if (!_formKey.currentState!.validate()) return;
 
     print('🔍 Starting search...');
+    print('  Mode: ${_tripMode == TripMode.sameDay ? 'Same-Day' : 'Overnight'}');
     print('  Origin: $_origin');
+    if (_tripMode == TripMode.overnight) {
+      print('  Destination: $_destination');
+    }
     print('  Date: ${DateFormat('yyyy-MM-dd').format(_selectedDate)}');
+    if (_tripMode == TripMode.overnight && _returnDate != null) {
+      print('  Return: ${DateFormat('yyyy-MM-dd').format(_returnDate!)}');
+    }
     print('  Depart window: $_earliestDepart:00 - $_departBy:00');
     print('  Return window: $_returnAfter:00 - $_returnBy:00');
     print('  Min ground time: $_minGroundTime hrs');
@@ -130,10 +154,18 @@ class _SearchScreenState extends State<SearchScreen> {
     setState(() => _isSearching = true);
 
     try {
-      print('📡 Calling API...');
-      final trips = await _apiService.searchTrips(
+      print('📡 Starting streaming API call...');
+
+      // For overnight mode, search only the specific destination
+      // For same-day mode, discover all destinations
+      final searchDestinations = _tripMode == TripMode.overnight
+          ? [_destination]
+          : (_selectedDestinations.isEmpty ? null : _selectedDestinations);
+
+      final tripStream = _apiService.searchTripsStream(
         origin: _origin,
         date: DateFormat('yyyy-MM-dd').format(_selectedDate),
+        returnDate: _returnDate != null ? DateFormat('yyyy-MM-dd').format(_returnDate!) : null,
         earliestDepart: _earliestDepart,
         departBy: _departBy,
         returnAfter: _returnAfter,
@@ -142,19 +174,18 @@ class _SearchScreenState extends State<SearchScreen> {
         minDuration: _minDuration,
         maxDuration: _maxDuration,
         airlines: _selectedAirlines.isEmpty ? null : _selectedAirlines,
-        destinations: _selectedDestinations.isEmpty ? null : _selectedDestinations,
+        destinations: searchDestinations,
       );
-
-      print('✅ API returned ${trips.length} trips');
 
       if (!mounted) return;
 
-      print('📱 Navigating to results screen...');
+      print('📱 Navigating to results screen IMMEDIATELY...');
+      // Navigate immediately with stream - results will appear as they're found!
       Navigator.push(
         context,
         MaterialPageRoute(
           builder: (context) => ResultsScreen(
-            trips: trips,
+            tripStream: tripStream,
             searchParams: {
               'origin': _origin,
               'date': DateFormat('MMM d, yyyy').format(_selectedDate),
@@ -163,7 +194,12 @@ class _SearchScreenState extends State<SearchScreen> {
             },
           ),
         ),
-      );
+      ).then((_) {
+        // Reset searching state when user returns
+        if (mounted) {
+          setState(() => _isSearching = false);
+        }
+      });
     } catch (e) {
       print('❌ Search failed: $e');
       if (!mounted) return;
@@ -175,7 +211,7 @@ class _SearchScreenState extends State<SearchScreen> {
           duration: const Duration(seconds: 5),
         ),
       );
-    } finally {
+
       if (mounted) {
         setState(() => _isSearching = false);
       }
@@ -213,27 +249,74 @@ class _SearchScreenState extends State<SearchScreen> {
                   backgroundColor: context.blueTint,
                 ),
 
-              // Header
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    children: [
-                      Icon(Icons.flight_takeoff, size: 48, color: context.primaryColor),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Plan Your Day Trip',
-                        style: Theme.of(context).textTheme.headlineSmall,
+              // Trip Mode Toggle
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () {
+                        setState(() {
+                          _tripMode = TripMode.sameDay;
+                        });
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: _tripMode == TripMode.sameDay
+                            ? context.primaryColor
+                            : context.surfaceColor,
+                        foregroundColor: _tripMode == TripMode.sameDay
+                            ? Colors.white
+                            : context.textPrimary,
+                        padding: const EdgeInsets.all(12),
+                        elevation: _tripMode == TripMode.sameDay ? 8 : 1,
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Meet clients in person and still be home for dinner',
-                        style: Theme.of(context).textTheme.bodyMedium,
-                        textAlign: TextAlign.center,
-                      ),
-                    ],
+                      child: const Text('Same Day', textAlign: TextAlign.center),
+                    ),
                   ),
-                ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () {
+                        setState(() {
+                          _tripMode = TripMode.overnight;
+                          // Initialize return date if not set
+                          _returnDate ??= _selectedDate.add(const Duration(days: 1));
+                        });
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: _tripMode == TripMode.overnight
+                            ? context.primaryColor
+                            : context.surfaceColor,
+                        foregroundColor: _tripMode == TripMode.overnight
+                            ? Colors.white
+                            : context.textPrimary,
+                        padding: const EdgeInsets.all(12),
+                        elevation: _tripMode == TripMode.overnight ? 8 : 1,
+                      ),
+                      child: const Text('Overnight', textAlign: TextAlign.center),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () {
+                        setState(() {
+                          _tripMode = TripMode.routeViewer;
+                        });
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: _tripMode == TripMode.routeViewer
+                            ? context.primaryColor
+                            : context.surfaceColor,
+                        foregroundColor: _tripMode == TripMode.routeViewer
+                            ? Colors.white
+                            : context.textPrimary,
+                        padding: const EdgeInsets.all(12),
+                        elevation: _tripMode == TripMode.routeViewer ? 8 : 1,
+                      ),
+                      child: const Text('Route View', textAlign: TextAlign.center),
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 16),
 
@@ -392,51 +475,136 @@ class _SearchScreenState extends State<SearchScreen> {
               ),
               const SizedBox(height: 24),
 
-              // Origin Airport
-              TextFormField(
-                controller: _originController,
-                decoration: InputDecoration(
-                  labelText: 'Your Home Airport',
-                  hintText: 'e.g., CLT, ATL, LAX',
-                  prefixIcon: const Icon(Icons.home),
-                  border: const OutlineInputBorder(),
-                  suffixIcon: _isDetectingAirport
-                      ? const Padding(
-                          padding: EdgeInsets.all(12.0),
-                          child: SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
+              // Origin Airport (and Destination for overnight/route viewer modes)
+              if (_tripMode == TripMode.sameDay)
+                TextFormField(
+                  controller: _originController,
+                  decoration: InputDecoration(
+                    labelText: 'Your Home Airport',
+                    hintText: 'e.g., CLT, ATL, LAX',
+                    prefixIcon: const Icon(Icons.home),
+                    border: const OutlineInputBorder(),
+                    suffixIcon: _isDetectingAirport
+                        ? const Padding(
+                            padding: EdgeInsets.all(12.0),
+                            child: SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          )
+                        : IconButton(
+                            icon: const Icon(Icons.my_location),
+                            tooltip: 'Use current location',
+                            onPressed: _autoDetectHomeAirport,
                           ),
-                        )
-                      : IconButton(
-                          icon: const Icon(Icons.my_location),
-                          tooltip: 'Use current location',
-                          onPressed: _autoDetectHomeAirport,
+                  ),
+                  textCapitalization: TextCapitalization.characters,
+                  maxLength: 3,
+                  onChanged: (value) {
+                    final upper = value.toUpperCase();
+                    if (upper != value) {
+                      _originController.value = _originController.value.copyWith(
+                        text: upper,
+                        selection: TextSelection.collapsed(offset: upper.length),
+                      );
+                    }
+                    _origin = upper;
+                  },
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please enter your airport code';
+                    }
+                    if (value.length != 3) {
+                      return 'Airport code must be 3 letters';
+                    }
+                    return null;
+                  },
+                )
+              else
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextFormField(
+                        controller: _originController,
+                        decoration: InputDecoration(
+                          labelText: 'Your Home Airport',
+                          hintText: 'e.g., CLT',
+                          prefixIcon: const Icon(Icons.home),
+                          border: const OutlineInputBorder(),
+                          suffixIcon: _isDetectingAirport
+                              ? const Padding(
+                                  padding: EdgeInsets.all(12.0),
+                                  child: SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                  ),
+                                )
+                              : IconButton(
+                                  icon: const Icon(Icons.my_location),
+                                  tooltip: 'Use current location',
+                                  onPressed: _autoDetectHomeAirport,
+                                ),
                         ),
+                        textCapitalization: TextCapitalization.characters,
+                        maxLength: 3,
+                        onChanged: (value) {
+                          final upper = value.toUpperCase();
+                          if (upper != value) {
+                            _originController.value = _originController.value.copyWith(
+                              text: upper,
+                              selection: TextSelection.collapsed(offset: upper.length),
+                            );
+                          }
+                          _origin = upper;
+                        },
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'Please enter your airport code';
+                          }
+                          if (value.length != 3) {
+                            return 'Airport code must be 3 letters';
+                          }
+                          return null;
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: TextFormField(
+                        controller: _destinationController,
+                        decoration: const InputDecoration(
+                          labelText: 'Destination Airport',
+                          hintText: 'e.g., ATL',
+                          prefixIcon: Icon(Icons.flight_land),
+                          border: OutlineInputBorder(),
+                        ),
+                        textCapitalization: TextCapitalization.characters,
+                        maxLength: 3,
+                        onChanged: (value) {
+                          final upper = value.toUpperCase();
+                          if (upper != value) {
+                            _destinationController.value = _destinationController.value.copyWith(
+                              text: upper,
+                              selection: TextSelection.collapsed(offset: upper.length),
+                            );
+                          }
+                          _destination = upper;
+                        },
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'Please enter destination code';
+                          }
+                          if (value.length != 3) {
+                            return 'Airport code must be 3 letters';
+                          }
+                          return null;
+                        },
+                      ),
+                    ),
+                  ],
                 ),
-                textCapitalization: TextCapitalization.characters,
-                maxLength: 3,
-                onChanged: (value) {
-                  final upper = value.toUpperCase();
-                  if (upper != value) {
-                    _originController.value = _originController.value.copyWith(
-                      text: upper,
-                      selection: TextSelection.collapsed(offset: upper.length),
-                    );
-                  }
-                  _origin = upper;
-                },
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Please enter your airport code';
-                  }
-                  if (value.length != 3) {
-                    return 'Airport code must be 3 letters';
-                  }
-                  return null;
-                },
-              ),
               if (_detectError != null)
                 Padding(
                   padding: const EdgeInsets.only(top: 4.0),
@@ -447,34 +615,179 @@ class _SearchScreenState extends State<SearchScreen> {
                 ),
               const SizedBox(height: 16),
 
-              // Date Picker
-              InkWell(
-                onTap: () async {
-                  final picked = await showDatePicker(
-                    context: context,
-                    initialDate: _selectedDate,
-                    firstDate: DateTime.now(),
-                    lastDate: DateTime.now().add(const Duration(days: 365)),
-                  );
-                  if (picked != null) {
-                    setState(() => _selectedDate = picked);
-                  }
-                },
-                child: InputDecorator(
-                  decoration: const InputDecoration(
-                    labelText: 'Travel Date',
-                    prefixIcon: Icon(Icons.calendar_today),
-                    border: OutlineInputBorder(),
+              // Date Picker(s) or Week Selector
+              if (_tripMode == TripMode.sameDay)
+                InkWell(
+                  onTap: () async {
+                    final picked = await showDatePicker(
+                      context: context,
+                      initialDate: _selectedDate,
+                      firstDate: DateTime.now(),
+                      lastDate: DateTime.now().add(const Duration(days: 365)),
+                    );
+                    if (picked != null) {
+                      setState(() => _selectedDate = picked);
+                    }
+                  },
+                  child: InputDecorator(
+                    decoration: const InputDecoration(
+                      labelText: 'Travel Date',
+                      prefixIcon: Icon(Icons.calendar_today),
+                      border: OutlineInputBorder(),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(DateFormat('EEEE, MMM d, yyyy').format(_selectedDate)),
+                        const Icon(Icons.arrow_drop_down),
+                      ],
+                    ),
                   ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(DateFormat('EEEE, MMM d, yyyy').format(_selectedDate)),
-                      const Icon(Icons.arrow_drop_down),
-                    ],
-                  ),
+                )
+              else if (_tripMode == TripMode.routeViewer)
+                // Week Selector for Route Viewer
+                Row(
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.arrow_back_ios),
+                      onPressed: () {
+                        setState(() {
+                          _selectedDate = _selectedDate.subtract(const Duration(days: 7));
+                        });
+                      },
+                      tooltip: 'Previous week',
+                    ),
+                    Expanded(
+                      child: InkWell(
+                        onTap: () async {
+                          final picked = await showDatePicker(
+                            context: context,
+                            initialDate: _selectedDate,
+                            firstDate: DateTime.now(),
+                            lastDate: DateTime.now().add(const Duration(days: 365)),
+                          );
+                          if (picked != null) {
+                            setState(() => _selectedDate = picked);
+                          }
+                        },
+                        child: InputDecorator(
+                          decoration: const InputDecoration(
+                            labelText: 'Week Starting',
+                            prefixIcon: Icon(Icons.date_range),
+                            border: OutlineInputBorder(),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  () {
+                                    final weekStart = _selectedDate.subtract(Duration(days: _selectedDate.weekday - 1));
+                                    final weekEnd = weekStart.add(const Duration(days: 6));
+                                    return '${DateFormat('MMM d').format(weekStart)} - ${DateFormat('MMM d, yyyy').format(weekEnd)}';
+                                  }(),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              const Icon(Icons.arrow_drop_down, size: 20),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.arrow_forward_ios),
+                      onPressed: () {
+                        setState(() {
+                          _selectedDate = _selectedDate.add(const Duration(days: 7));
+                        });
+                      },
+                      tooltip: 'Next week',
+                    ),
+                  ],
+                )
+              else
+                Row(
+                  children: [
+                    Expanded(
+                      child: InkWell(
+                        onTap: () async {
+                          final picked = await showDatePicker(
+                            context: context,
+                            initialDate: _selectedDate,
+                            firstDate: DateTime.now(),
+                            lastDate: DateTime.now().add(const Duration(days: 365)),
+                          );
+                          if (picked != null) {
+                            setState(() {
+                              _selectedDate = picked;
+                              // Auto-adjust return date if it's before departure
+                              if (_returnDate == null || _returnDate!.isBefore(picked)) {
+                                _returnDate = picked.add(const Duration(days: 1));
+                              }
+                            });
+                          }
+                        },
+                        child: InputDecorator(
+                          decoration: const InputDecoration(
+                            labelText: 'Travel Date',
+                            prefixIcon: Icon(Icons.calendar_today),
+                            border: OutlineInputBorder(),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  DateFormat('MMM d, yyyy').format(_selectedDate),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              const Icon(Icons.arrow_drop_down, size: 20),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: InkWell(
+                        onTap: () async {
+                          final picked = await showDatePicker(
+                            context: context,
+                            initialDate: _returnDate ?? _selectedDate.add(const Duration(days: 1)),
+                            firstDate: _selectedDate,
+                            lastDate: DateTime.now().add(const Duration(days: 365)),
+                          );
+                          if (picked != null) {
+                            setState(() => _returnDate = picked);
+                          }
+                        },
+                        child: InputDecorator(
+                          decoration: const InputDecoration(
+                            labelText: 'Return Date',
+                            prefixIcon: Icon(Icons.event),
+                            border: OutlineInputBorder(),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  DateFormat('MMM d, yyyy').format(
+                                    _returnDate ?? _selectedDate.add(const Duration(days: 1)),
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              const Icon(Icons.arrow_drop_down, size: 20),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              ),
               const SizedBox(height: 24),
 
               // Airline Filter
@@ -505,12 +818,13 @@ class _SearchScreenState extends State<SearchScreen> {
               ),
               const SizedBox(height: 24),
 
-              // Time Preferences
-              Text(
-                'Travel Schedule',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-              const SizedBox(height: 12),
+              // Time Preferences (hidden for Route Viewer)
+              if (_tripMode != TripMode.routeViewer) ...[
+                Text(
+                  'Travel Schedule',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 12),
 
               // Departure Window
               Row(
@@ -644,6 +958,7 @@ class _SearchScreenState extends State<SearchScreen> {
                 onChanged: (value) => setState(() => _maxDuration = value.toInt()),
               ),
               const SizedBox(height: 24),
+              ], // End of time preferences section
 
               // Search Button
               ElevatedButton.icon(

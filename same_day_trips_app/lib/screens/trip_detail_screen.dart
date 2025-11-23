@@ -67,7 +67,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
 
   String? _extractCarrierCode(String flightNumbers) {
     final first = flightNumbers.split(',').first.trim();
-    final match = RegExp(r'([A-Z]{2})\\d').firstMatch(first);
+    final match = RegExp(r'([A-Z]{2})\d').firstMatch(first);
     return match != null ? match.group(1) : null;
   }
 

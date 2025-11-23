@@ -156,10 +156,14 @@ class FlightOffer {
 class Destination {
   final String code;
   final String city;
+  final double? latitude;  // For distance-based sorting
+  final double? longitude; // For distance-based sorting
 
   Destination({
     required this.code,
     required this.city,
+    this.latitude,
+    this.longitude,
   });
 
   factory Destination.fromJson(Map<String, dynamic> json) {
@@ -175,6 +179,7 @@ class Destination {
 class SearchCriteria {
   final String origin;
   final String date;
+  final String? returnDate; // Optional: defaults to same day for overnight trips
   final int earliestDepart; // Hour in 24hr format for earliest departure (e.g., 5 = 5:00 AM)
   final int departBy; // Hour in 24hr format (e.g., 9 = 9:00 AM)
   final int returnAfter; // Hour in 24hr format (e.g., 15 = 3:00 PM)
@@ -188,6 +193,7 @@ class SearchCriteria {
   SearchCriteria({
     required this.origin,
     required this.date,
+    this.returnDate,
     required this.earliestDepart,
     required this.departBy,
     required this.returnAfter,
