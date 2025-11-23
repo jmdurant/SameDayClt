@@ -257,9 +257,10 @@ class _RouteViewerScreenState extends State<RouteViewerScreen> {
     if (flights.isEmpty) {
       return [
         DataRow(cells: [
-          const DataCell(Text('')),
-          const DataCell(Text('No flights found')),
-          ...List.generate(8, (_) => const DataCell(Text('-'))),
+          const DataCell(Text('')), // Flight column
+          const DataCell(Text('No flights found')), // Day 1
+          ...List.generate(6, (_) => const DataCell(Text('-'))), // Days 2-7
+          const DataCell(Text('-')), // Price
         ]),
       ];
     }

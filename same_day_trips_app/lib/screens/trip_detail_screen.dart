@@ -67,8 +67,9 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
 
   String? _extractCarrierCode(String flightNumbers) {
     final first = flightNumbers.split(',').first.trim();
-    final match = RegExp(r'([A-Z]{2})\d').firstMatch(first);
-    return match != null ? match.group(1) : null;
+    // Accept formats like AA1234, AA 1234, AA-1234
+    final match = RegExp(r'^([A-Za-z]{2})').firstMatch(first.replaceAll(RegExp(r'[^A-Za-z0-9]'), ''));
+    return match != null ? match.group(1)!.toUpperCase() : null;
   }
 
   String? _buildAirlineBookingUrl() {
@@ -1469,7 +1470,8 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
             if (smartAirlineUrl != null ||
                 googleUrl != null ||
                 kayakUrl != null ||
-                (smartAirlineCode == 'AA' && widget.trip.airlineUrl != null)) ...[
+                (widget.trip.airlineUrl != null &&
+                    (smartAirlineCode == 'AA' || widget.trip.airlineUrl!.contains('aa.com')))) ...[
               Text(
                 'Book Your Flights',
                 style: Theme.of(context).textTheme.titleLarge,
@@ -1496,7 +1498,8 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                   color: context.warningColor,
                   onPressed: () => _launchUrl(kayakUrl),
                 ),
-              if (widget.trip.airlineUrl != null && smartAirlineCode == 'AA')
+              if (widget.trip.airlineUrl != null &&
+                  (smartAirlineCode == 'AA' || widget.trip.airlineUrl!.contains('aa.com')))
                 _BookingButton(
                   label: 'Search AA Award Flights',
                   icon: Icons.card_giftcard,
