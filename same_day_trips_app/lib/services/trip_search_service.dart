@@ -9,15 +9,6 @@ import 'duffel_service.dart';
 class TripSearchService {
   final AmadeusService _amadeus = AmadeusService();
   final DuffelService _duffel = DuffelService();
-  static const Map<String, List<String>> _metroExpansions = {
-    'NYC': ['JFK', 'LGA', 'EWR'],
-    'WAS': ['DCA', 'IAD', 'BWI'],
-    'CHI': ['ORD', 'MDW'],
-    'HOU': ['IAH', 'HOU'],
-    'LON': ['LHR', 'LGW', 'LCY', 'LTN', 'STN', 'SEN'],
-    'PAR': ['CDG', 'ORY', 'BVA'],
-    'BER': ['BER'],
-  };
 
   /// Search for all viable same-day trips with PROGRESSIVE RESULTS
   /// Returns a stream that emits trips as they're found
@@ -33,16 +24,14 @@ class TripSearchService {
       destinations = criteria.destinations!
           .map((code) => Destination(code: code, city: code))
           .toList();
-      destinations = _expandMetroDestinations(destinations);
-      print('dY"? Using ${destinations.length} specified destinations (after metro expansion)');
+      print('dY"? Using ${destinations.length} specified destinations');
     } else {
       destinations = await _amadeus.discoverDestinations(
         origin: criteria.origin,
         date: criteria.date,
         maxDurationHours: 4,
       );
-      destinations = _expandMetroDestinations(destinations);
-      print('dY"? Discovered ${destinations.length} destinations (after metro expansion)');
+      print('dY"? Discovered ${destinations.length} destinations');
     }
 
     if (destinations.isEmpty) {
@@ -102,16 +91,14 @@ class TripSearchService {
       destinations = criteria.destinations!
           .map((code) => Destination(code: code, city: code))
           .toList();
-      destinations = _expandMetroDestinations(destinations);
-      print('dY"? Using ${destinations.length} specified destinations (after metro expansion)');
+      print('dY"? Using ${destinations.length} specified destinations');
     } else {
       destinations = await _amadeus.discoverDestinations(
         origin: criteria.origin,
         date: criteria.date,
         maxDurationHours: 4,
       );
-      destinations = _expandMetroDestinations(destinations);
-      print('dY"? Discovered ${destinations.length} destinations (after metro expansion)');
+      print('dY"? Discovered ${destinations.length} destinations');
     }
 
     if (destinations.isEmpty) {
@@ -428,28 +415,6 @@ class TripSearchService {
     }
 
     return sorted;
-  }
-
-  /// Expand metro/city codes (e.g., NYC, WAS) into individual airports
-  List<Destination> _expandMetroDestinations(List<Destination> destinations) {
-    final expanded = <Destination>[];
-    for (final dest in destinations) {
-      final upper = dest.code.toUpperCase();
-      if (_metroExpansions.containsKey(upper)) {
-        for (final airport in _metroExpansions[upper]!) {
-          expanded.add(Destination(
-            code: airport,
-            city: dest.city,
-            latitude: dest.latitude,
-            longitude: dest.longitude,
-            timezoneOffset: dest.timezoneOffset,
-          ));
-        }
-      } else {
-        expanded.add(dest);
-      }
-    }
-    return expanded;
   }
 
   /// Calculate distance between two lat/lng points using Haversine formula (km)
